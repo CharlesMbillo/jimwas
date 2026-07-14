@@ -13,11 +13,8 @@ export default defineConfig({
       '127.0.0.1',
       '.vercel.run',
       '.vercel.app',
+      '.vusercontent.net',
     ],
-    hmr: {
-      protocol: 'ws',
-      host: 'localhost',
-      port: 5173,
-    },
+    hmr: false,
   },
 });
