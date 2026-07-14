@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import { Upload, Database, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { restoreFromBackup, type BackupData } from '../lib/db';
-import backupData from '../data/jimwas-backup-2026-07-14.json';
 
 export function PopulateDBPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,7 +12,11 @@ export function PopulateDBPage() {
     setIsLoading(true);
     setStatus('idle');
     try {
-      const backup = backupData as unknown as BackupData;
+      const response = await fetch('/data/jimwas-backup-2026-07-14.json');
+      if (!response.ok) {
+        throw new Error(`Failed to load backup: ${response.statusText}`);
+      }
+      const backup = (await response.json()) as BackupData;
       const restoreResult = await restoreFromBackup(backup);
       setResult(restoreResult);
       setStatus(restoreResult.errors.length === 0 ? 'success' : 'error');
