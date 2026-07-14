@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { POSTerminal } from './routes/pos';
-import './lib/populate-db';
 import { CustomersPage } from './routes/customers';
 import { ProductsPage } from './routes/products';
 import { InventoryPage } from './routes/inventory';
