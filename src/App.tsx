@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { POSTerminal } from './routes/pos';
+import './lib/populate-db';
 import { CustomersPage } from './routes/customers';
 import { ProductsPage } from './routes/products';
 import { InventoryPage } from './routes/inventory';
@@ -13,6 +14,7 @@ import { AuditPage } from './routes/audit';
 import { LedgerPage } from './routes/ledger';
 import { BackupPage } from './routes/backup';
 import { MpesaPaymentsPage } from './routes/mpesa-payments';
+import { PopulateDBPage } from './routes/populate-db';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
 import { initNetworkListeners, syncNow } from './lib/sync';
@@ -81,6 +83,8 @@ function AppContent() {
         return <BackupPage />;
       case 'mpesa-payments':
         return <MpesaPaymentsPage />;
+      case 'populate-db':
+        return <PopulateDBPage />;
       default:
         return <POSTerminal />;
     }

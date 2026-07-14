@@ -1384,6 +1384,88 @@ export async function getReceiptSettings(): Promise<ReceiptSettings | undefined>
   return db.get('receipt_settings', 'receipt-settings');
 }
 
+// ============ BACKUP & RESTORE OPERATIONS ============
+
+export interface BackupData {
+  version: string;
+  exported_at: string;
+  exported_by?: string;
+  business_name: string;
+  data: {
+    customers?: any[];
+    products?: any[];
+    transactions?: any[];
+    [key: string]: any;
+  };
+}
+
+export async function restoreFromBackup(backup: BackupData): Promise<{ synced: number; skipped: number; errors: string[] }> {
+  const db = await getDB();
+  const errors: string[] = [];
+  let synced = 0;
+  let skipped = 0;
+
+  try {
+    // Restore products
+    if (backup.data.products && Array.isArray(backup.data.products)) {
+      for (const product of backup.data.products) {
+        try {
+          await db.put('products', product);
+          synced++;
+        } catch (error) {
+          errors.push(`Product ${product.name}: ${error}`);
+          skipped++;
+        }
+      }
+    }
+
+    // Restore customers
+    if (backup.data.customers && Array.isArray(backup.data.customers)) {
+      for (const customer of backup.data.customers) {
+        try {
+          await db.put('customers', customer);
+          synced++;
+        } catch (error) {
+          errors.push(`Customer ${customer.name}: ${error}`);
+          skipped++;
+        }
+      }
+    }
+
+    // Restore transactions if present
+    if (backup.data.transactions && Array.isArray(backup.data.transactions)) {
+      for (const transaction of backup.data.transactions) {
+        try {
+          await db.put('transactions', transaction);
+          synced++;
+        } catch (error) {
+          errors.push(`Transaction ${transaction.id}: ${error}`);
+          skipped++;
+        }
+      }
+    }
+
+    // Sync to cloud if available
+    try {
+      const { getSupabase } = await import('./sync');
+      const supabase = getSupabase();
+      if (supabase && backup.data.products) {
+        await supabase.from('products').upsert(backup.data.products);
+      }
+      if (supabase && backup.data.customers) {
+        await supabase.from('customers').upsert(backup.data.customers);
+      }
+    } catch (syncError) {
+      console.log('[v0] Cloud sync skipped:', syncError);
+    }
+
+    return { synced, skipped, errors };
+  } catch (error) {
+    errors.push(`Restore failed: ${error}`);
+    return { synced, skipped, errors };
+  }
+}
+
 // ============ LEDGER STORE OPERATIONS ============
 
 export interface LedgerEntryRecord {
