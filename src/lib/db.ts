@@ -1256,6 +1256,40 @@ export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentR
   }
 }
 
+// M-Pesa Statistics
+export interface MpesaStatistics {
+  totalTransactions: number;
+  totalRevenue: number;
+  successfulTransactions: number;
+  failedTransactions: number;
+  successRate: number;
+  recentTransactions: MpesaPaymentRecord[];
+}
+
+export async function getMpesaStatistics(sinceDate?: Date): Promise<MpesaStatistics> {
+  const payments = sinceDate ? await getMpesaPaymentsSinceDate(sinceDate) : await getAllMpesaPayments();
+  
+  const totalTransactions = payments.length;
+  const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+  const successfulTransactions = payments.filter(p => p.status === 'success').length;
+  const failedTransactions = payments.filter(p => p.status === 'failed').length;
+  const successRate = totalTransactions > 0 ? (successfulTransactions / totalTransactions) * 100 : 0;
+  
+  // Sort by created_at descending and take last 5
+  const recentTransactions = payments
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+  
+  return {
+    totalTransactions,
+    totalRevenue,
+    successfulTransactions,
+    failedTransactions,
+    successRate,
+    recentTransactions,
+  };
+}
+
 // Payment method operations
 export async function savePaymentMethod(method: PaymentMethodConfig) {
   const db = await getDB();

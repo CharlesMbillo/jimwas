@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, DollarSign, ShoppingCart, Users, CreditCard, Star, Calendar } from 'lucide-react';
 import { getAllTransactions, getAllCustomers, getAllInstallmentPlans, getAllProducts } from '../lib/db';
 import { getTodaySummary, getWeekSummary, getMonthSummary, formatCurrency } from '../lib/ledger';
+import { MpesaDashboardWidget } from '../components/MpesaDashboardWidget';
 import type { Transaction, Customer, InstallmentPlan, Product } from '../lib/types';
 
 export function DashboardPage() {
@@ -234,6 +235,9 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* M-Pesa Dashboard Widget */}
+      <MpesaDashboardWidget timeRange={timeRange} />
 
       {/* Charts and Tables */}
       <div className="grid grid-cols-2 gap-6">
