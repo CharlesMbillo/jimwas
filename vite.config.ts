@@ -14,5 +14,10 @@ export default defineConfig({
       '.vercel.run',
       '.vercel.app',
     ],
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5173,
+    },
   },
 });
