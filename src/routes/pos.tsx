@@ -51,7 +51,21 @@ export function POSTerminal() {
 
   useEffect(() => {
     loadData();
+    // Load cart from storage on mount
+    loadSavedCart();
+    // Load parked sales on mount
+    loadSavedParkedSales();
   }, []);
+
+  // Auto-save cart to IndexedDB whenever it changes (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (cart.length > 0) {
+        saveCartToStorage();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [cart, selectedCustomer, saleType, depositAmount]);
 
   // Timer for M-Pesa in-progress states only — do NOT reset on failure/success so the final time remains visible
   useEffect(() => {
@@ -97,6 +111,52 @@ export function POSTerminal() {
       mpesa.consumer_key &&
       mpesa.consumer_secret);
     setMpesaConfigured(hasCredentials);
+  };
+
+  const saveCartToStorage = async () => {
+    try {
+      const { saveCartSession } = await import('../lib/db');
+      await saveCartSession({
+        id: 'current-cart',
+        items: cart,
+        selectedCustomer,
+        total: cartTotal,
+        saleType,
+        depositAmount,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('[v0] Failed to save cart:', error);
+    }
+  };
+
+  const loadSavedCart = async () => {
+    try {
+      const { loadCartSession } = await import('../lib/db');
+      const savedCart = await loadCartSession();
+      if (savedCart && savedCart.items.length > 0) {
+        setCart(savedCart.items);
+        setSelectedCustomer(savedCart.selectedCustomer);
+        setSaleType(savedCart.saleType || 'standard');
+        setDepositAmount(savedCart.depositAmount || 0);
+      }
+    } catch (error) {
+      console.error('[v0] Failed to load cart:', error);
+    }
+  };
+
+  const loadSavedParkedSales = async () => {
+    try {
+      const { getAllParkedSales } = await import('../lib/db');
+      const parked = await getAllParkedSales();
+      if (parked.length > 0) {
+        console.log(`[v0] Loaded ${parked.length} parked sales`);
+        // You can display these in a UI list if needed
+      }
+    } catch (error) {
+      console.error('[v0] Failed to load parked sales:', error);
+    }
   };
 
   // Debounce search terms for better performance

@@ -351,6 +351,33 @@ interface POSDatabase extends DBSchema {
       created_at: string;
     };
   };
+  cart_sessions: {
+    key: string;
+    value: {
+      id: string;
+      items: TransactionItem[];
+      selectedCustomer: any | null;
+      total: number;
+      saleType: string;
+      depositAmount: number;
+      created_at: string;
+      updated_at: string;
+    };
+  };
+  parked_sales: {
+    key: string;
+    value: {
+      id: string;
+      cart: TransactionItem[];
+      selectedCustomer: any | null;
+      total: number;
+      saleType: string;
+      depositAmount: number;
+      notes?: string;
+      created_at: string;
+      updated_at: string;
+    };
+  };
 }
 
 export interface TransactionItem {
@@ -573,6 +600,16 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
       // Expense categories store
       if (!db.objectStoreNames.contains('expense_categories')) {
         db.createObjectStore('expense_categories', { keyPath: 'id' });
+      }
+
+      // Cart session store (for persisting current cart)
+      if (!db.objectStoreNames.contains('cart_sessions')) {
+        db.createObjectStore('cart_sessions', { keyPath: 'id' });
+      }
+
+      // Parked sales store (for saving incomplete transactions)
+      if (!db.objectStoreNames.contains('parked_sales')) {
+        db.createObjectStore('parked_sales', { keyPath: 'id' });
       }
     },
   });
@@ -1543,4 +1580,109 @@ export async function getExpenseCategory(id: string): Promise<ExpenseCategoryRec
 export async function getAllExpenseCategories(): Promise<ExpenseCategoryRecord[]> {
   const db = await getDB();
   return db.getAll('expense_categories');
+}
+
+// ============ CART SESSION PERSISTENCE ============
+
+export interface CartSession {
+  id: string;
+  items: CartItem[];
+  selectedCustomer: any | null;
+  total: number;
+  saleType: string;
+  depositAmount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function saveCartSession(session: CartSession): Promise<void> {
+  try {
+    const db = await getDB();
+    session.updated_at = new Date().toISOString();
+    // Use 'current' as the key to always have one active session
+    await db.put('cart_sessions', session, 'current');
+  } catch (error) {
+    console.error('[v0] Failed to save cart session:', error);
+  }
+}
+
+export async function loadCartSession(): Promise<CartSession | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('cart_sessions', 'current');
+  } catch (error) {
+    console.error('[v0] Failed to load cart session:', error);
+    return undefined;
+  }
+}
+
+export async function clearCartSession(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('cart_sessions', 'current');
+  } catch (error) {
+    console.error('[v0] Failed to clear cart session:', error);
+  }
+}
+
+// ============ PARKED SALES PERSISTENCE ============
+
+export interface ParkedSale {
+  id: string;
+  cart: CartItem[];
+  selectedCustomer: any | null;
+  total: number;
+  saleType: string;
+  depositAmount: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function saveParkedSale(sale: ParkedSale): Promise<void> {
+  try {
+    const db = await getDB();
+    sale.updated_at = new Date().toISOString();
+    await db.put('parked_sales', sale, sale.id);
+  } catch (error) {
+    console.error('[v0] Failed to save parked sale:', error);
+  }
+}
+
+export async function getParkedSale(id: string): Promise<ParkedSale | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('parked_sales', id);
+  } catch (error) {
+    console.error('[v0] Failed to load parked sale:', error);
+    return undefined;
+  }
+}
+
+export async function getAllParkedSales(): Promise<ParkedSale[]> {
+  try {
+    const db = await getDB();
+    return await db.getAll('parked_sales');
+  } catch (error) {
+    console.error('[v0] Failed to load parked sales:', error);
+    return [];
+  }
+}
+
+export async function deleteParkedSale(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('parked_sales', id);
+  } catch (error) {
+    console.error('[v0] Failed to delete parked sale:', error);
+  }
+}
+
+export async function clearAllParkedSales(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.clear('parked_sales');
+  } catch (error) {
+    console.error('[v0] Failed to clear parked sales:', error);
+  }
 }

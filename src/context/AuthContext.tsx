@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { User } from '../lib/security-types';
 import { getCurrentUser, login as authLogin, logout as authLogout, initializeSecurity } from '../lib/auth';
 import { clearAllPermissionCache } from '../lib/permissions';
+import { initializeApp } from '../lib/init';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +24,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
+        // Initialize app (default settings, etc.)
+        await initializeApp();
+
         // Initialize security data (roles, permissions, admin user)
         await initializeSecurity();
 
