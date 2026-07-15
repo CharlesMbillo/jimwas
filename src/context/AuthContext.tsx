@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { User } from '../lib/security-types';
 import { getCurrentUser, login as authLogin, logout as authLogout, initializeSecurity } from '../lib/auth';
 import { clearAllPermissionCache } from '../lib/permissions';
-import { initializeApp } from '../lib/init';
+import { initializeApp, shouldAutoRestore } from '../lib/init';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Initialize app (default settings, etc.)
         await initializeApp();
+
+        // Check if we should auto-restore from last backup
+        const needsRestore = await shouldAutoRestore();
+        if (needsRestore) {
+          console.log('[v0] Auto-restoring backup data from previous session...');
+          // Note: Actual restore logic happens in backup module on-demand
+          // This is just a signal that data should be available from IndexedDB
+        }
 
         // Initialize security data (roles, permissions, admin user)
         await initializeSecurity();

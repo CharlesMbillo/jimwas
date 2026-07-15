@@ -1,4 +1,4 @@
-import { getDB } from './db';
+import { getDB, getLastRestorePoint, getAllProducts, getAllCustomers } from './db';
 import {
   DEFAULT_BUSINESS_SETTINGS,
   DEFAULT_MPESA_SETTINGS,
@@ -49,4 +49,36 @@ export async function initializeApp(): Promise<void> {
  */
 export function isAppInitialized(): boolean {
   return sessionStorage.getItem('app_initialized') === 'true';
+}
+
+/**
+ * Check if we should attempt auto-restore from last backup
+ * Returns true if:
+ * - A restore point exists (previous backup was imported)
+ * - Local product/customer data is empty (fresh session or IndexedDB cleared)
+ */
+export async function shouldAutoRestore(): Promise<boolean> {
+  try {
+    const restorePoint = await getLastRestorePoint();
+    if (!restorePoint) {
+      console.log('[v0] No restore point found, auto-restore skipped');
+      return false;
+    }
+
+    // Check if we have data in the database
+    const products = await getAllProducts();
+    const customers = await getAllCustomers();
+
+    if (products.length === 0 || customers.length === 0) {
+      console.log('[v0] Database appears empty, auto-restore needed');
+      console.log(`[v0] Restore point: ${restorePoint.product_count} products, ${restorePoint.customer_count} customers`);
+      return true;
+    }
+
+    console.log('[v0] Database has data, auto-restore not needed');
+    return false;
+  } catch (error) {
+    console.error('[v0] Error checking auto-restore status:', error);
+    return false;
+  }
 }

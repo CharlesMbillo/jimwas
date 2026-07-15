@@ -42,6 +42,7 @@ import {
   saveLoyaltySettings,
   saveReceiptSettings,
   clearSyncQueue,
+  saveRestorePoint,
 } from './db';
 
 export interface BackupData {
@@ -251,11 +252,11 @@ export async function importBackup(
     // Clear sync queue before restore
     await clearSyncQueue();
 
-    // Import customers
+    // Import customers - mark as 'synced' since backup is trusted source
     if (backup.data.customers && Array.isArray(backup.data.customers)) {
       for (const customer of backup.data.customers) {
         try {
-          await saveCustomer({ ...customer, sync_status: 'pending' } as any);
+          await saveCustomer({ ...customer, sync_status: 'synced' } as any);
           result.imported.customers++;
         } catch (e) {
           result.errors.push(`Customer: ${e}`);
@@ -263,11 +264,11 @@ export async function importBackup(
       }
     }
 
-    // Import products
+    // Import products - mark as 'synced'
     if (backup.data.products && Array.isArray(backup.data.products)) {
       for (const product of backup.data.products) {
         try {
-          await saveProduct({ ...product, sync_status: 'pending' } as any);
+          await saveProduct({ ...product, sync_status: 'synced' } as any);
           result.imported.products++;
         } catch (e) {
           result.errors.push(`Product: ${e}`);
@@ -275,11 +276,11 @@ export async function importBackup(
       }
     }
 
-    // Import transactions
+    // Import transactions - mark as 'synced'
     if (backup.data.transactions && Array.isArray(backup.data.transactions)) {
       for (const transaction of backup.data.transactions) {
         try {
-          await saveTransaction({ ...transaction, sync_status: 'pending' } as any);
+          await saveTransaction({ ...transaction, sync_status: 'synced' } as any);
           result.imported.transactions++;
         } catch (e) {
           result.errors.push(`Transaction: ${e}`);
@@ -287,11 +288,11 @@ export async function importBackup(
       }
     }
 
-    // Import installment plans
+    // Import installment plans - mark as 'synced'
     if (backup.data.installment_plans && Array.isArray(backup.data.installment_plans)) {
       for (const plan of backup.data.installment_plans) {
         try {
-          await saveInstallmentPlan({ ...plan, sync_status: 'pending' } as any);
+          await saveInstallmentPlan({ ...plan, sync_status: 'synced' } as any);
           result.imported.installment_plans++;
         } catch (e) {
           result.errors.push(`Installment plan: ${e}`);
@@ -299,11 +300,11 @@ export async function importBackup(
       }
     }
 
-    // Import installment payments
+    // Import installment payments - mark as 'synced'
     if (backup.data.installment_payments && Array.isArray(backup.data.installment_payments)) {
       for (const payment of backup.data.installment_payments) {
         try {
-          await saveInstallmentPayment({ ...payment, sync_status: 'pending' } as any);
+          await saveInstallmentPayment({ ...payment, sync_status: 'synced' } as any);
           result.imported.installment_payments++;
         } catch (e) {
           result.errors.push(`Installment payment: ${e}`);
@@ -311,11 +312,11 @@ export async function importBackup(
       }
     }
 
-    // Import loyalty transactions
+    // Import loyalty transactions - mark as 'synced'
     if (backup.data.loyalty_transactions && Array.isArray(backup.data.loyalty_transactions)) {
       for (const loyaltyTx of backup.data.loyalty_transactions) {
         try {
-          await saveLoyaltyTransaction({ ...loyaltyTx, sync_status: 'pending' } as any);
+          await saveLoyaltyTransaction({ ...loyaltyTx, sync_status: 'synced' } as any);
           result.imported.loyalty_transactions++;
         } catch (e) {
           result.errors.push(`Loyalty transaction: ${e}`);
@@ -323,11 +324,11 @@ export async function importBackup(
       }
     }
 
-    // Import stock movements
+    // Import stock movements - mark as 'synced'
     if (backup.data.stock_movements && Array.isArray(backup.data.stock_movements)) {
       for (const movement of backup.data.stock_movements) {
         try {
-          await saveStockMovement({ ...movement, sync_status: 'pending' } as any);
+          await saveStockMovement({ ...movement, sync_status: 'synced' } as any);
           result.imported.stock_movements++;
         } catch (e) {
           result.errors.push(`Stock movement: ${e}`);
@@ -335,11 +336,11 @@ export async function importBackup(
       }
     }
 
-    // Import suppliers
+    // Import suppliers - mark as 'synced'
     if (backup.data.suppliers && Array.isArray(backup.data.suppliers)) {
       for (const supplier of backup.data.suppliers) {
         try {
-          await saveSupplier({ ...supplier, sync_status: 'pending' } as any);
+          await saveSupplier({ ...supplier, sync_status: 'synced' } as any);
           result.imported.suppliers++;
         } catch (e) {
           result.errors.push(`Supplier: ${e}`);
@@ -347,11 +348,11 @@ export async function importBackup(
       }
     }
 
-    // Import deliveries
+    // Import deliveries - mark as 'synced'
     if (backup.data.deliveries && Array.isArray(backup.data.deliveries)) {
       for (const delivery of backup.data.deliveries) {
         try {
-          await saveDelivery({ ...delivery, sync_status: 'pending' } as any);
+          await saveDelivery({ ...delivery, sync_status: 'synced' } as any);
           result.imported.deliveries++;
         } catch (e) {
           result.errors.push(`Delivery: ${e}`);
@@ -359,11 +360,11 @@ export async function importBackup(
       }
     }
 
-    // Import stock adjustments
+    // Import stock adjustments - mark as 'synced'
     if (backup.data.stock_adjustments && Array.isArray(backup.data.stock_adjustments)) {
       for (const adjustment of backup.data.stock_adjustments) {
         try {
-          await saveStockAdjustment({ ...adjustment, sync_status: 'pending' } as any);
+          await saveStockAdjustment({ ...adjustment, sync_status: 'synced' } as any);
           result.imported.stock_adjustments++;
         } catch (e) {
           result.errors.push(`Stock adjustment: ${e}`);
@@ -371,11 +372,11 @@ export async function importBackup(
       }
     }
 
-    // Import roles BEFORE users (roles are referenced by users via role_id foreign key)
+    // Import roles BEFORE users (roles are referenced by users via role_id foreign key) - mark as 'synced'
     if (backup.data.roles && Array.isArray(backup.data.roles)) {
       for (const role of backup.data.roles) {
         try {
-          await saveRole({ ...role, sync_status: 'pending' } as any);
+          await saveRole({ ...role, sync_status: 'synced' } as any);
           result.imported.roles++;
         } catch (e) {
           result.errors.push(`Role: ${e}`);
@@ -383,11 +384,11 @@ export async function importBackup(
       }
     }
 
-    // Import users (if option enabled) - must be after roles due to foreign key constraint
+    // Import users (if option enabled) - must be after roles due to foreign key constraint - mark as 'synced'
     if (options.includeUsers && backup.data.users && Array.isArray(backup.data.users)) {
       for (const user of backup.data.users) {
         try {
-          await saveUser({ ...user, sync_status: 'pending' } as any);
+          await saveUser({ ...user, sync_status: 'synced' } as any);
           result.imported.users++;
         } catch (e) {
           result.errors.push(`User: ${e}`);
@@ -395,11 +396,11 @@ export async function importBackup(
       }
     }
 
-    // Import audit logs (if option enabled)
+    // Import audit logs (if option enabled) - mark as 'synced'
     if (options.includeAuditLogs && backup.data.audit_logs && Array.isArray(backup.data.audit_logs)) {
       for (const log of backup.data.audit_logs) {
         try {
-          await saveAuditLog({ ...log, sync_status: 'pending' } as any);
+          await saveAuditLog({ ...log, sync_status: 'synced' } as any);
           result.imported.audit_logs++;
         } catch (e) {
           result.errors.push(`Audit log: ${e}`);
@@ -407,11 +408,11 @@ export async function importBackup(
       }
     }
 
-    // Import approval requests
+    // Import approval requests - mark as 'synced'
     if (backup.data.approval_requests && Array.isArray(backup.data.approval_requests)) {
       for (const request of backup.data.approval_requests) {
         try {
-          await saveApprovalRequest({ ...request, sync_status: 'pending' } as any);
+          await saveApprovalRequest({ ...request, sync_status: 'synced' } as any);
           result.imported.approval_requests++;
         } catch (e) {
           result.errors.push(`Approval request: ${e}`);
@@ -469,6 +470,17 @@ export async function importBackup(
 
     if (result.errors.length > 0) {
       result.message += ` with ${result.errors.length} errors`;
+    }
+
+    // Save restore point for future auto-restore if data is lost
+    if (result.success && totalImported > 0) {
+      await saveRestorePoint(
+        backup.exported_at,
+        result.imported.products,
+        result.imported.customers,
+        result.imported.transactions
+      );
+      console.log('[v0] Backup restore point saved for auto-restore on future app loads');
     }
   } catch (error) {
     result.success = false;

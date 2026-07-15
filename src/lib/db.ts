@@ -379,6 +379,17 @@ interface POSDatabase extends DBSchema {
       updated_at: string;
     };
   };
+  restore_points: {
+    key: string;
+    value: {
+      id: string;
+      backup_date: string;
+      created_at: string;
+      product_count: number;
+      customer_count: number;
+      transaction_count: number;
+    };
+  };
 }
 
 export interface TransactionItem {
@@ -611,6 +622,11 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
       // Parked sales store (for saving incomplete transactions)
       if (!db.objectStoreNames.contains('parked_sales')) {
         db.createObjectStore('parked_sales', { keyPath: 'id' });
+      }
+
+      // Restore points store (for persisting last successful backup import)
+      if (!db.objectStoreNames.contains('restore_points')) {
+        db.createObjectStore('restore_points', { keyPath: 'id' });
       }
     },
   });
@@ -1685,5 +1701,53 @@ export async function clearAllParkedSales(): Promise<void> {
     await db.clear('parked_sales');
   } catch (error) {
     console.error('[v0] Failed to clear parked sales:', error);
+  }
+}
+
+// ============ RESTORE POINT PERSISTENCE ============
+
+export interface RestorePoint {
+  id: string;
+  backup_date: string;
+  created_at: string;
+  product_count: number;
+  customer_count: number;
+  transaction_count: number;
+}
+
+export async function saveRestorePoint(backupDate: string, productCount: number, customerCount: number, transactionCount: number): Promise<void> {
+  try {
+    const db = await getDB();
+    const restorePoint: RestorePoint = {
+      id: 'last-restore-point',
+      backup_date: backupDate,
+      created_at: new Date().toISOString(),
+      product_count: productCount,
+      customer_count: customerCount,
+      transaction_count: transactionCount,
+    };
+    await db.put('restore_points', restorePoint, restorePoint.id);
+    console.log('[v0] Saved restore point:', restorePoint);
+  } catch (error) {
+    console.error('[v0] Failed to save restore point:', error);
+  }
+}
+
+export async function getLastRestorePoint(): Promise<RestorePoint | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('restore_points', 'last-restore-point');
+  } catch (error) {
+    console.error('[v0] Failed to load restore point:', error);
+    return undefined;
+  }
+}
+
+export async function clearRestorePoint(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('restore_points', 'last-restore-point');
+  } catch (error) {
+    console.error('[v0] Failed to clear restore point:', error);
   }
 }
