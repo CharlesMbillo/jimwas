@@ -781,9 +781,9 @@ export function POSTerminal() {
 
       {/* Checkout Modal */}
       {showCheckout && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-slate-700 flex-shrink-0">
               <h3 className="text-xl font-bold text-white">Checkout</h3>
               <button
                 onClick={() => {
@@ -802,7 +802,7 @@ export function POSTerminal() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
               {/* Sale Type Selector */}
               <SaleTypeSelector
                 saleType={saleType}
