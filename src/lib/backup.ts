@@ -371,19 +371,7 @@ export async function importBackup(
       }
     }
 
-    // Import users (if option enabled)
-    if (options.includeUsers && backup.data.users && Array.isArray(backup.data.users)) {
-      for (const user of backup.data.users) {
-        try {
-          await saveUser({ ...user, sync_status: 'pending' } as any);
-          result.imported.users++;
-        } catch (e) {
-          result.errors.push(`User: ${e}`);
-        }
-      }
-    }
-
-    // Import roles
+    // Import roles BEFORE users (roles are referenced by users via role_id foreign key)
     if (backup.data.roles && Array.isArray(backup.data.roles)) {
       for (const role of backup.data.roles) {
         try {
@@ -391,6 +379,18 @@ export async function importBackup(
           result.imported.roles++;
         } catch (e) {
           result.errors.push(`Role: ${e}`);
+        }
+      }
+    }
+
+    // Import users (if option enabled) - must be after roles due to foreign key constraint
+    if (options.includeUsers && backup.data.users && Array.isArray(backup.data.users)) {
+      for (const user of backup.data.users) {
+        try {
+          await saveUser({ ...user, sync_status: 'pending' } as any);
+          result.imported.users++;
+        } catch (e) {
+          result.errors.push(`User: ${e}`);
         }
       }
     }
