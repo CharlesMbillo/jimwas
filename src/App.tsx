@@ -14,6 +14,7 @@ import { LedgerPage } from './routes/ledger';
 import { BackupPage } from './routes/backup';
 import { MpesaPaymentsPage } from './routes/mpesa-payments';
 import { PopulateDBPage } from './routes/populate-db';
+import { VoidRequestsPage } from './routes/void-requests';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/Toast';
 import { initNetworkListeners, syncNow } from './lib/sync';
@@ -84,6 +85,8 @@ function AppContent() {
         return <MpesaPaymentsPage />;
       case 'populate-db':
         return <PopulateDBPage />;
+      case 'void-requests':
+        return <VoidRequestsPage />;
       default:
         return <POSTerminal />;
     }

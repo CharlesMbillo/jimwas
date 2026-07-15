@@ -1,5 +1,5 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
-import { ShoppingCart, Users, Package, CreditCard, BarChart3, Wifi, WifiOff, RefreshCw, Warehouse, Shield, LogOut, User, ChevronDown, Settings, FileText, DollarSign, Archive, Menu, X, Smartphone, Database } from 'lucide-react';
+import { ShoppingCart, Users, Package, CreditCard, BarChart3, Wifi, WifiOff, RefreshCw, Warehouse, Shield, LogOut, User, ChevronDown, Settings, FileText, DollarSign, Archive, Menu, X, Smartphone, Database, AlertCircle } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useKeyboardScroll } from '../hooks/useKeyboardScroll';
 import { syncNow, getSyncState, subscribeToSyncState, type SyncState } from '../lib/sync';
@@ -49,6 +49,11 @@ export function Layout({ children, currentPage, onNavigate, user }: LayoutProps)
     { id: 'ledger', label: 'Ledger', icon: DollarSign },
   ] : [];
 
+  // Manager/Admin approval items
+  const approvalItems = user && (user.role_code === 'admin' || user.role_code === 'manager') ? [
+    { id: 'void-requests', label: 'Void Approvals', icon: AlertCircle },
+  ] : [];
+
   // Admin only navigation items
   const adminOnlyItems = user && user.role_code === 'admin' ? [
     { id: 'populate-db', label: 'Populate DB', icon: Database },
@@ -56,7 +61,7 @@ export function Layout({ children, currentPage, onNavigate, user }: LayoutProps)
     { id: 'settings', label: 'Settings', icon: Settings },
   ] : [];
 
-  const allSecondaryItems = [...adminNavItems, ...adminOnlyItems];
+  const allSecondaryItems = [...adminNavItems, ...approvalItems, ...adminOnlyItems];
 
   const handleSync = async () => {
     const result = await syncNow();
