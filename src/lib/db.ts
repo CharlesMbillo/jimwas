@@ -19,6 +19,7 @@ import type {
   LoyaltySettings,
   ReceiptSettings,
 } from './settings-types';
+import type { CartItem } from './types';
 
 interface POSDatabase extends DBSchema {
   customers: {
@@ -355,7 +356,7 @@ interface POSDatabase extends DBSchema {
     key: string;
     value: {
       id: string;
-      items: TransactionItem[];
+      items: CartItem[];
       selectedCustomer: any | null;
       total: number;
       saleType: string;
@@ -368,7 +369,7 @@ interface POSDatabase extends DBSchema {
     key: string;
     value: {
       id: string;
-      cart: TransactionItem[];
+      cart: CartItem[];
       selectedCustomer: any | null;
       total: number;
       saleType: string;
