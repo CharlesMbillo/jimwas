@@ -8,6 +8,7 @@ import { useToast } from '../components/Toast';
 import { initiateSTKPush, pollForPaymentCompletion } from '../lib/mpesa';
 import { completeSale, validatePhoneNumber, validatePrice, validateStock, sanitizeInput } from '../lib/transaction-utils';
 import { useDebounce } from '../hooks/useDebounce';
+import { SaleTypeSelector } from '../components/SaleTypeSelector';
 import type { Product, Customer, CartItem } from '../lib/types';
 
 const LOYALTY_POINTS_PER_SHILLING = 100;
@@ -43,6 +44,10 @@ export function POSTerminal() {
   const [mpesaConfigured, setMpesaConfigured] = useState<boolean>(false);
   const [mpesaEnvironment, setMpesaEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [mpesaSimulating, setMpesaSimulating] = useState(false);
+  
+  // Sale type state
+  const [saleType, setSaleType] = useState<'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama'>('standard');
+  const [depositAmount, setDepositAmount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -177,6 +182,9 @@ export function POSTerminal() {
     setMpesaReceiptNumber(null);
     setMpesaStartTime(null);
     setElapsedSeconds(0);
+    // Reset sale type
+    setSaleType('standard');
+    setDepositAmount(0);
   };
 
   // Handle M-Pesa STK Push
@@ -426,9 +434,21 @@ export function POSTerminal() {
       }
     }
 
-    const paid = parseFloat(amountPaid) || cartTotal;
-    if (paid < cartTotal) {
-      toast.show('Amount paid is less than total due', 'error');
+    // Calculate amount paid based on sale type
+    let paid = parseFloat(amountPaid) || cartTotal;
+    let amountRequired = cartTotal;
+    
+    // For Lipa Mdogo and Kyama, only deposit is required today
+    if (saleType === 'lipa_mdogo' || saleType === 'kyama') {
+      amountRequired = depositAmount;
+      paid = Math.min(parseFloat(amountPaid) || depositAmount, cartTotal);
+    }
+    
+    if (paid < amountRequired) {
+      const requiredLabel = (saleType === 'lipa_mdogo' || saleType === 'kyama') 
+        ? 'deposit amount' 
+        : 'total amount due';
+      toast.show(`Amount paid is less than ${requiredLabel}`, 'error');
       return;
     }
 
@@ -439,8 +459,11 @@ export function POSTerminal() {
       selectedCustomer,
       paymentMethod,
       amountPaid: paid,
-      change,
+      change: (saleType === 'lipa_mdogo' || saleType === 'kyama') ? 0 : change,
       userId: user?.id || 'system',
+      saleType,
+      depositAmount: (saleType === 'lipa_mdogo' || saleType === 'kyama') ? depositAmount : 0,
+      balanceAmount: (saleType === 'lipa_mdogo' || saleType === 'kyama') ? (cartTotal - depositAmount) : 0,
     });
 
     if (result.success) {

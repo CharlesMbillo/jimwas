@@ -51,6 +51,9 @@ export interface Transaction {
   created_at: string;
   sync_status: 'pending' | 'synced';
   items: TransactionItem[];
+  sale_type?: 'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama';
+  deposit_amount?: number;
+  balance_amount?: number;
 }
 
 export interface InstallmentPlan {
