@@ -14,6 +14,9 @@ export interface CompleteSaleParams {
   change: number;
   userId: string;
   mpesaReceipt?: string;
+  saleType?: 'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama';
+  depositAmount?: number;
+  balanceAmount?: number;
 }
 
 export interface CompleteSaleResult {
@@ -32,6 +35,9 @@ export async function completeSale({
   change,
   userId,
   mpesaReceipt,
+  saleType = 'standard',
+  depositAmount = 0,
+  balanceAmount = 0,
 }: CompleteSaleParams): Promise<CompleteSaleResult> {
   const now = new Date().toISOString();
 
@@ -57,6 +63,9 @@ export async function completeSale({
     created_at: now,
     sync_status: 'pending' as const,
     items,
+    sale_type: saleType,
+    deposit_amount: depositAmount,
+    balance_amount: balanceAmount,
   };
 
   // Save transaction locally and queue for sync

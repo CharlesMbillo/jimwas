@@ -743,6 +743,15 @@ export function POSTerminal() {
             </div>
 
             <div className="space-y-4">
+              {/* Sale Type Selector */}
+              <SaleTypeSelector
+                saleType={saleType}
+                onSaleTypeChange={setSaleType}
+                cartTotal={cartTotal}
+                depositAmount={depositAmount}
+                onDepositChange={setDepositAmount}
+              />
+
               {/* Payment Method */}
               <div>
                 <label className="text-sm text-slate-400 block mb-2">Payment Method</label>
@@ -1033,30 +1042,59 @@ export function POSTerminal() {
                 <>
                   {/* Amount Paid */}
                   <div>
-                    <label className="text-sm text-slate-400 block mb-2">Amount Paid</label>
+                    <label className="text-sm text-slate-400 block mb-2">
+                      {saleType === 'lipa_mdogo' || saleType === 'kyama' 
+                        ? 'Deposit Amount (KES)' 
+                        : 'Amount Paid (KES)'}
+                    </label>
                     <input
                       type="number"
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder={cartTotal.toString()}
+                      placeholder={(saleType === 'lipa_mdogo' || saleType === 'kyama' 
+                        ? depositAmount 
+                        : cartTotal).toString()}
                       className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none text-lg"
                     />
                   </div>
 
                   {/* Summary */}
                   <div className="bg-slate-700 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Total</span>
-                      <span>KES {cartTotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Paid</span>
-                      <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
-                      <span className="text-white">Change</span>
-                      <span className="text-emerald-400">KES {change.toLocaleString()}</span>
-                    </div>
+                    {saleType === 'lipa_mdogo' || saleType === 'kyama' ? (
+                      <>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Total Amount</span>
+                          <span>KES {cartTotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Deposit Today</span>
+                          <span>KES {depositAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Received</span>
+                          <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
+                          <span className="text-white">Balance Due</span>
+                          <span className="text-amber-400">KES {Math.max(0, cartTotal - depositAmount).toLocaleString()}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Total</span>
+                          <span>KES {cartTotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Paid</span>
+                          <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
+                          <span className="text-white">Change</span>
+                          <span className="text-emerald-400">KES {change.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Complete Button */}
