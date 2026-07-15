@@ -337,9 +337,24 @@ export function POSTerminal() {
           amount: cart.reduce((s, i) => s + i.product.selling_price * i.quantity, 0),
         }),
       });
-      const data = await response.json();
+
+      // Safely parse JSON response
+      let data;
+      try {
+        const text = await response.text();
+        if (!text) {
+          setMpesaError('Empty response from M-Pesa service');
+          return;
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[v0] JSON parse error:', parseError);
+        setMpesaError('Invalid response from M-Pesa service');
+        return;
+      }
+
       if (!response.ok || !data.success) {
-        setMpesaError(data.error || 'Simulation failed');
+        setMpesaError(data?.error || 'Simulation failed');
         return;
       }
       // Directly mark as success — don't rely on polling

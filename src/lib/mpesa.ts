@@ -48,10 +48,21 @@ export async function initiateSTKPush(
       }),
     });
 
-    const data = await response.json();
+    // Safely parse JSON response
+    let data;
+    try {
+      const text = await response.text();
+      if (!text) {
+        return { success: false, error: 'Empty response from M-Pesa service' };
+      }
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[v0] JSON parse error in initiateSTKPush:', parseError);
+      return { success: false, error: 'Invalid response from M-Pesa service' };
+    }
 
     if (!response.ok) {
-      return { success: false, error: data.error || 'Failed to initiate payment' };
+      return { success: false, error: data?.error || 'Failed to initiate payment' };
     }
 
     return {
@@ -77,10 +88,21 @@ export async function checkSTKPushStatus(checkoutRequestId: string): Promise<STK
       body: JSON.stringify({ checkoutRequestId }),
     });
 
-    const data = await response.json();
+    // Safely parse JSON response
+    let data;
+    try {
+      const text = await response.text();
+      if (!text) {
+        return { success: false, status: 'failed', error: 'Empty response from M-Pesa service' };
+      }
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[v0] JSON parse error in checkSTKPushStatus:', parseError);
+      return { success: false, status: 'failed', error: 'Invalid response from M-Pesa service' };
+    }
 
     if (!response.ok) {
-      return { success: false, status: 'failed', error: data.error || 'Failed to check status' };
+      return { success: false, status: 'failed', error: data?.error || 'Failed to check status' };
     }
 
     return {
