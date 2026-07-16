@@ -1,7 +1,7 @@
 import { getDB, getLastRestorePoint, getAllProducts, getAllCustomers } from './db';
 import {
   DEFAULT_BUSINESS_SETTINGS,
-  DEFAULT_MPESA_SETTINGS,
+  DEFAULT_KCB_SETTINGS,
   DEFAULT_PAYMENT_METHODS,
   DEFAULT_LOYALTY_SETTINGS,
   DEFAULT_RECEIPT_SETTINGS,
@@ -23,7 +23,7 @@ export async function initializeApp(): Promise<void> {
       // Create all default settings in IndexedDB
       await Promise.all([
         db.put('business_settings', DEFAULT_BUSINESS_SETTINGS, 'default'),
-        db.put('mpesa_settings', DEFAULT_MPESA_SETTINGS, 'default'),
+        db.put('mpesa_settings', DEFAULT_KCB_SETTINGS, 'default'),
         db.put('loyalty_settings', DEFAULT_LOYALTY_SETTINGS, 'default'),
         db.put('receipt_settings', DEFAULT_RECEIPT_SETTINGS, 'default'),
       ]);

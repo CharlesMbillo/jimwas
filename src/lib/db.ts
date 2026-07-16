@@ -14,7 +14,7 @@ import type {
 } from './security-types';
 import type {
   BusinessSettings,
-  MpesaSettings,
+  KCBSettings,
   PaymentMethodConfig,
   LoyaltySettings,
   ReceiptSettings,
@@ -279,11 +279,11 @@ interface POSDatabase extends DBSchema {
     key: string;
     value: BusinessSettings;
   };
-  mpesa_settings: {
+  kcb_settings: {
     key: string;
-    value: MpesaSettings;
+    value: KCBSettings;
   };
-  mpesa_payments: {
+  kcb_payments: {
     key: string;
     value: {
       id: string;
@@ -581,8 +581,8 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
       }
 
       // M-Pesa payments store
-      if (!db.objectStoreNames.contains('mpesa_payments')) {
-        const mpesaPaymentStore = db.createObjectStore('mpesa_payments', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('kcb_payments')) {
+        const mpesaPaymentStore = db.createObjectStore('kcb_payments', { keyPath: 'id' });
         mpesaPaymentStore.createIndex('by-transaction', 'transaction_id');
         mpesaPaymentStore.createIndex('by-phone', 'phone');
         mpesaPaymentStore.createIndex('by-status', 'status');
@@ -1161,28 +1161,26 @@ export async function getBusinessSettings(): Promise<BusinessSettings | undefine
   return db.get('business_settings', 'business-settings');
 }
 
-// Mpesa settings operations
-export async function saveMpesaSettings(settings: MpesaSettings): Promise<MpesaSettings> {
+// KCB settings operations
+export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSettings> {
   const db = await getDB();
   // Write to IDB optimistically
-  await db.put('mpesa_settings', settings);
+  await db.put('kcb_settings', settings);
 
   // Direct upsert to Supabase — do not go through sync queue for settings
   const { getSupabase } = await import('./sync');
   const supabase = getSupabase();
   if (supabase) {
-    const { error } = await supabase.from('mpesa_settings').upsert({
+    const { error } = await supabase.from('kcb_settings').upsert({
       id: settings.id,
       is_enabled: settings.is_enabled,
       environment: settings.environment,
-      consumer_key: settings.consumer_key || null,
-      consumer_secret: settings.consumer_secret || null,
-      passkey: settings.passkey || null,
-      short_code: settings.short_code || null,
-      till_number: settings.till_number || null,
+      client_id: settings.client_id || null,
+      client_secret: settings.client_secret || null,
+      org_shortcode: settings.org_shortcode || null,
+      org_passkey: settings.org_passkey || null,
       callback_url: settings.callback_url || null,
-      timeout_url: settings.timeout_url || null,
-      result_url: settings.result_url || null,
+      public_cert_path: settings.public_cert_path || null,
       default_phone_country_code: settings.default_phone_country_code,
       last_updated: settings.last_updated,
       last_updated_by: settings.last_updated_by || null,
@@ -1193,17 +1191,17 @@ export async function saveMpesaSettings(settings: MpesaSettings): Promise<MpesaS
   }
 
   const synced = { ...settings, sync_status: 'synced' as const };
-  await db.put('mpesa_settings', synced);
+  await db.put('kcb_settings', synced);
   return synced;
 }
 
-export async function getMpesaSettings(): Promise<MpesaSettings | undefined> {
+export async function getKCBSettings(): Promise<KCBSettings | undefined> {
   const db = await getDB();
-  return db.get('mpesa_settings', 'mpesa-settings');
+  return db.get('kcb_settings', 'kcb-settings');
 }
 
-// M-Pesa Payment operations
-export interface MpesaPaymentRecord {
+// KCB Payment operations
+export interface KCBPaymentRecord {
   id: string;
   transaction_id?: string;
   phone: string;
@@ -1222,13 +1220,13 @@ export interface MpesaPaymentRecord {
   sync_status: 'pending' | 'synced';
 }
 
-export async function saveMpesaPayment(payment: MpesaPaymentRecord) {
+export async function saveKCBPayment(payment: KCBPaymentRecord) {
   const db = await getDB();
-  await db.put('mpesa_payments', payment);
+  await db.put('kcb_payments', payment);
   const { getSupabase } = await import('./sync');
   const supabase = getSupabase();
   if (supabase) {
-    const { error } = await supabase.from('mpesa_payments').upsert({
+    const { error } = await supabase.from('kcb_payments').upsert({
       id: payment.id,
       transaction_id: payment.transaction_id,
       phone: payment.phone,
@@ -1249,41 +1247,41 @@ export async function saveMpesaPayment(payment: MpesaPaymentRecord) {
   }
 }
 
-export async function getMpesaPayment(id: string): Promise<MpesaPaymentRecord | undefined> {
+export async function getKCBPayment(id: string): Promise<KCBPaymentRecord | undefined> {
   const db = await getDB();
-  return db.get('mpesa_payments', id);
+  return db.get('kcb_payments', id);
 }
 
-export async function getAllMpesaPayments(): Promise<MpesaPaymentRecord[]> {
+export async function getAllKCBPayments(): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAll('mpesa_payments');
+  return db.getAll('kcb_payments');
 }
 
-export async function getMpesaPaymentsByStatus(status: string): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsByStatus(status: string): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAllFromIndex('mpesa_payments', 'by-status', status);
+  return db.getAllFromIndex('kcb_payments', 'by-status', status);
 }
 
-export async function getMpesaPaymentsByPhone(phone: string): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsByPhone(phone: string): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAllFromIndex('mpesa_payments', 'by-phone', phone);
+  return db.getAllFromIndex('kcb_payments', 'by-phone', phone);
 }
 
-export async function getMpesaPaymentsByTransaction(transactionId: string): Promise<MpesaPaymentRecord | undefined> {
+export async function getKCBPaymentsByTransaction(transactionId: string): Promise<KCBPaymentRecord | undefined> {
   const db = await getDB();
-  const allPayments = await db.getAllFromIndex('mpesa_payments', 'by-transaction', transactionId);
+  const allPayments = await db.getAllFromIndex('kcb_payments', 'by-transaction', transactionId);
   return allPayments[0];
 }
 
-export async function getMpesaPaymentsSinceDate(date: Date): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsSinceDate(date: Date): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  const allPayments = await db.getAll('mpesa_payments');
+  const allPayments = await db.getAll('kcb_payments');
   return allPayments.filter(p => new Date(p.created_at) >= date);
 }
 
-export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentRecord['status'], updates?: Partial<MpesaPaymentRecord>) {
+export async function updateKCBPaymentStatus(id: string, status: KCBPaymentRecord['status'], updates?: Partial<KCBPaymentRecord>) {
   const db = await getDB();
-  const payment = await db.get('mpesa_payments', id);
+  const payment = await db.get('kcb_payments', id);
   if (!payment) throw new Error('M-Pesa payment not found');
   
   const updated = {
@@ -1292,12 +1290,12 @@ export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentR
     status,
     last_attempt_at: new Date().toISOString(),
   };
-  await db.put('mpesa_payments', updated);
+  await db.put('kcb_payments', updated);
   
   const { getSupabase } = await import('./sync');
   const supabase = getSupabase();
   if (supabase) {
-    const { error } = await supabase.from('mpesa_payments').update({
+    const { error } = await supabase.from('kcb_payments').update({
       status: updated.status,
       result_desc: updated.result_desc,
       error_message: updated.error_message,
@@ -1311,17 +1309,17 @@ export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentR
 }
 
 // M-Pesa Statistics
-export interface MpesaStatistics {
+export interface KCBStatistics {
   totalTransactions: number;
   totalRevenue: number;
   successfulTransactions: number;
   failedTransactions: number;
   successRate: number;
-  recentTransactions: MpesaPaymentRecord[];
+  recentTransactions: KCBPaymentRecord[];
 }
 
-export async function getMpesaStatistics(sinceDate?: Date): Promise<MpesaStatistics> {
-  const payments = sinceDate ? await getMpesaPaymentsSinceDate(sinceDate) : await getAllMpesaPayments();
+export async function getKCBStatistics(sinceDate?: Date): Promise<KCBStatistics> {
+  const payments = sinceDate ? await getKCBPaymentsSinceDate(sinceDate) : await getAllKCBPayments();
   
   const totalTransactions = payments.length;
   const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);

@@ -17,7 +17,7 @@ import {
   getAllAuditLogs,
   getAllApprovalRequests,
   getBusinessSettings,
-  getMpesaSettings,
+  getKCBSettings,
   getAllPaymentMethods,
   getLoyaltySettings,
   getReceiptSettings,
@@ -37,7 +37,7 @@ import {
   saveAuditLog,
   saveApprovalRequest,
   saveBusinessSettings,
-  saveMpesaSettings,
+  saveKCBSettings,
   savePaymentMethod,
   saveLoyaltySettings,
   saveReceiptSettings,
@@ -126,7 +126,7 @@ export async function exportBackup(exportedBy?: string): Promise<BackupData> {
     getAllAuditLogs(),
     getAllApprovalRequests(),
     getBusinessSettings(),
-    getMpesaSettings(),
+    getKCBSettings(),
     getAllPaymentMethods(),
     getLoyaltySettings(),
     getReceiptSettings(),
@@ -443,7 +443,7 @@ export async function importBackup(
       }
       if (backup.data.mpesa_settings) {
         try {
-          await saveMpesaSettings({ ...backup.data.mpesa_settings, sync_status: 'pending' } as any);
+          await saveKCBSettings({ ...backup.data.mpesa_settings, sync_status: 'pending' } as any);
         } catch (e) {
           result.errors.push(`M-Pesa settings: ${e}`);
         }

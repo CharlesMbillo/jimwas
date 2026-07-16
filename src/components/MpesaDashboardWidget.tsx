@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Smartphone, TrendingUp, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
-import { getMpesaStatistics } from '../lib/db';
-import type { MpesaStatistics } from '../lib/db';
+import { getKCBStatistics } from '../lib/db';
+import type { KCBStatistics } from '../lib/db';
 
 interface MpesaDashboardWidgetProps {
   timeRange: 'today' | 'week' | 'month';
 }
 
 export function MpesaDashboardWidget({ timeRange }: MpesaDashboardWidgetProps) {
-  const [stats, setStats] = useState<MpesaStatistics | null>(null);
+  const [stats, setStats] = useState<KCBStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -33,7 +33,7 @@ export function MpesaDashboardWidget({ timeRange }: MpesaDashboardWidgetProps) {
           break;
       }
       
-      const data = await getMpesaStatistics(sinceDate);
+      const data = await getKCBStatistics(sinceDate);
       setStats(data);
     } catch (error) {
       console.error('[v0] Error loading M-Pesa statistics:', error);

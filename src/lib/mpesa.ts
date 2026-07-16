@@ -1,6 +1,6 @@
 // M-Pesa STK Push Integration
 import { generateId } from './db';
-import type { MpesaPaymentRecord } from './db';
+import type { KCBPaymentRecord } from './db';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -166,7 +166,7 @@ export function formatPhoneDisplay(phone: string): string {
 }
 
 // Create and track M-Pesa payment record
-export async function createMpesaPaymentRecord(
+export async function createKCBPaymentRecord(
   phone: string,
   amount: number,
   options?: {
@@ -175,10 +175,10 @@ export async function createMpesaPaymentRecord(
     checkoutRequestId?: string;
     merchantRequestId?: string;
   }
-): Promise<MpesaPaymentRecord> {
+): Promise<KCBPaymentRecord> {
   const { saveMpesaPayment } = await import('./db');
   
-  const payment: MpesaPaymentRecord = {
+  const payment: KCBPaymentRecord = {
     id: `mpesa_${generateId()}`,
     phone,
     amount,
