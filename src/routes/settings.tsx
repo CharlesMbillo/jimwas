@@ -60,11 +60,37 @@ export function SettingsPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showKCBSecret, setShowKCBSecret] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadAllSettings();
   }, []);
+
+  // Auto-save KCB settings with debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      // Only auto-save if settings have changed and are not in default state
+      if (kcbSettings.sync_status === 'pending' && (kcbSettings.client_id || kcbSettings.client_secret || kcbSettings.org_shortcode)) {
+        try {
+          setAutoSaving(true);
+          await saveKCBSettings({
+            ...kcbSettings,
+            last_updated: new Date().toISOString(),
+            last_updated_by: user?.id,
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending' as const,
+          });
+        } catch (error) {
+          console.error('[v0] Auto-save failed for KCB settings:', error);
+        } finally {
+          setAutoSaving(false);
+        }
+      }
+    }, 3000); // 3 second debounce
+
+    return () => clearTimeout(timer);
+  }, [kcbSettings, user?.id]);
 
   const loadAllSettings = async () => {
     setIsLoading(true);
@@ -149,10 +175,16 @@ export function SettingsPage() {
         sync_status: 'pending' as const,
       };
       const saved = await saveKCBSettings(settingsToSave);
-      setKCBSettings(saved ?? settingsToSave);
-      showMessage('success', 'KCB MpesaExpressAPI settings saved successfully');
+      if (saved) {
+        setKCBSettings(saved);
+        showMessage('success', 'KCB STK settings saved to IndexedDB and syncing to cloud');
+      } else {
+        setKCBSettings(settingsToSave);
+        showMessage('success', 'KCB STK settings saved locally (sync pending)');
+      }
     } catch (error) {
-      showMessage('error', 'Failed to save KCB MpesaExpressAPI settings');
+      console.error('[v0] Save error:', error);
+      showMessage('error', error instanceof Error ? error.message : 'Failed to save KCB settings');
     } finally {
       setSaving(false);
     }
@@ -290,6 +322,7 @@ export function SettingsPage() {
             onTogglePayment={togglePaymentMethod}
             onSaveMpesa={saveMpesa}
             saving={saving}
+            autoSaving={autoSaving}
             showSecret={showKCBSecret}
             onToggleSecret={() => setShowKCBSecret(!showKCBSecret)}
           />
@@ -560,6 +593,7 @@ function PaymentsTab({
   onTogglePayment,
   onSaveMpesa,
   saving,
+  autoSaving,
   showSecret,
   onToggleSecret,
 }: {
@@ -569,6 +603,7 @@ function PaymentsTab({
   onTogglePayment: (m: PaymentMethodConfig) => void;
   onSaveMpesa: () => void;
   saving: boolean;
+  autoSaving: boolean;
   showSecret: boolean;
   onToggleSecret: () => void;
 }) {
@@ -891,7 +926,14 @@ function PaymentsTab({
             {/* Save Button with Status */}
             <div className="pt-4 border-t border-slate-600">
               <div className="flex items-center justify-between">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
+                  {/* Auto-save Status */}
+                  {autoSaving && (
+                    <div className="flex items-center gap-1 text-xs text-blue-400">
+                      <Loader2 size={12} className="animate-spin" />
+                      Auto-saving...
+                    </div>
+                  )}
                   {/* Sync Status */}
                   <div className="flex items-center gap-2">
                     {kcbSettings.sync_status === 'synced' ? (
