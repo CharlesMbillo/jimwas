@@ -712,8 +712,8 @@ function PaymentsTab({
           if (!kcbSettings.client_id) missing.push('Consumer Key');
           if (!kcbSettings.client_secret) missing.push('Consumer Secret');
           if (!kcbSettings.org_passkey) missing.push('Organization Pass Key');
+          if (!kcbSettings.org_shortcode) missing.push('Short Code or Till Number');
           if (kcbSettings.environment === 'production' && !kcbSettings.passkey) missing.push('Initiator Passkey');
-          if (!kcbSettings.org_shortcode && !kcbSettings.org_passkey) missing.push('Short Code or Till Number');
           if (missing.length > 0) {
             return (
               <div className="mb-4 flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
