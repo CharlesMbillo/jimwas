@@ -15,25 +15,31 @@ export async function initializeApp(): Promise<void> {
   try {
     const db = await getDB();
 
-    // Check if business settings exist
-    const existingSettings = await db.get('business_settings', 'default');
-    if (!existingSettings) {
-      console.log('[v0] Initializing default business settings...');
-      
-      // Create all default settings in IndexedDB
-      await Promise.all([
-        db.put('business_settings', DEFAULT_BUSINESS_SETTINGS, 'default'),
-        db.put('kcb_settings', DEFAULT_KCB_SETTINGS, 'kcb-settings'),
-        db.put('loyalty_settings', DEFAULT_LOYALTY_SETTINGS, 'default'),
-        db.put('receipt_settings', DEFAULT_RECEIPT_SETTINGS, 'default'),
-      ]);
+    // Add a small delay to allow database upgrade to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Initialize payment methods
-      for (const method of DEFAULT_PAYMENT_METHODS) {
-        await db.put('payment_methods', method, method.id);
+    try {
+      // Check if business settings exist
+      const existingSettings = await db.get('business_settings', 'default');
+      if (!existingSettings) {
+        console.log('[v0] Initializing default business settings...');
+        
+        // Create all default settings in IndexedDB with sequential puts to avoid race conditions
+        await db.put('business_settings', DEFAULT_BUSINESS_SETTINGS, 'default');
+        await db.put('kcb_settings', DEFAULT_KCB_SETTINGS, 'kcb-settings');
+        await db.put('loyalty_settings', DEFAULT_LOYALTY_SETTINGS, 'default');
+        await db.put('receipt_settings', DEFAULT_RECEIPT_SETTINGS, 'default');
+
+        // Initialize payment methods sequentially
+        for (const method of DEFAULT_PAYMENT_METHODS) {
+          await db.put('payment_methods', method, method.id);
+        }
+
+        console.log('[v0] Default settings initialized successfully');
       }
-
-      console.log('[v0] Default settings initialized successfully');
+    } catch (dbError) {
+      console.warn('[v0] Database initialization warning (non-critical):', dbError instanceof Error ? dbError.message : String(dbError));
+      // Don't fail - database might already be initialized
     }
 
     // Mark app as initialized

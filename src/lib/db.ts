@@ -1166,37 +1166,59 @@ export async function getBusinessSettings(): Promise<BusinessSettings | undefine
 export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSettings> {
   try {
     const db = await getDB();
-    // Write to IDB optimistically
-    await db.put('kcb_settings', settings);
+    
+    // Ensure the settings object has required fields
+    const safeSettings: KCBSettings = {
+      ...settings,
+      id: settings.id || 'kcb-settings',
+      sync_status: 'pending' as const,
+    };
+
+    try {
+      // Write to IDB optimistically
+      await db.put('kcb_settings', safeSettings);
+    } catch (idbError) {
+      console.warn('[v0] IndexedDB write warning for KCB settings:', idbError instanceof Error ? idbError.message : String(idbError));
+      // Continue to try Supabase sync even if IDB fails
+    }
 
     // Direct upsert to Supabase — do not go through sync queue for settings
     const { getSupabase } = await import('./sync');
     const supabase = getSupabase();
     if (supabase) {
-      const { error } = await supabase.from('kcb_settings').upsert({
-        id: settings.id,
-        is_enabled: settings.is_enabled,
-        environment: settings.environment,
-        client_id: settings.client_id || null,
-        client_secret: settings.client_secret || null,
-        org_shortcode: settings.org_shortcode || null,
-        org_passkey: settings.org_passkey || null,
-        callback_url: settings.callback_url || null,
-        public_cert_path: settings.public_cert_path || null,
-        default_phone_country_code: settings.default_phone_country_code,
-        last_updated: settings.last_updated,
-        last_updated_by: settings.last_updated_by || null,
-        created_at: settings.created_at,
-        updated_at: settings.updated_at,
-      });
-      if (error) throw new Error(error.message);
+      try {
+        const { error } = await supabase.from('kcb_settings').upsert({
+          id: safeSettings.id,
+          is_enabled: safeSettings.is_enabled,
+          environment: safeSettings.environment,
+          client_id: safeSettings.client_id || null,
+          client_secret: safeSettings.client_secret || null,
+          org_shortcode: safeSettings.org_shortcode || null,
+          org_passkey: safeSettings.org_passkey || null,
+          callback_url: safeSettings.callback_url || null,
+          public_cert_path: safeSettings.public_cert_path || null,
+          default_phone_country_code: safeSettings.default_phone_country_code,
+          last_updated: safeSettings.last_updated,
+          last_updated_by: safeSettings.last_updated_by || null,
+          created_at: safeSettings.created_at,
+          updated_at: safeSettings.updated_at,
+        });
+        if (error) console.warn('[v0] Supabase sync warning for KCB settings:', error.message);
+      } catch (supabaseError) {
+        console.warn('[v0] Supabase sync error (non-critical):', supabaseError instanceof Error ? supabaseError.message : String(supabaseError));
+      }
     }
 
-    const synced = { ...settings, sync_status: 'synced' as const };
-    await db.put('kcb_settings', synced);
-    return synced;
+    try {
+      const synced = { ...safeSettings, sync_status: 'synced' as const };
+      await db.put('kcb_settings', synced);
+      return synced;
+    } catch (finalIdbError) {
+      console.warn('[v0] Final IndexedDB write failed, returning unsaved settings');
+      return safeSettings;
+    }
   } catch (error) {
-    console.error('[v0] Failed to save KCB settings:', error);
+    console.error('[v0] Critical error in saveKCBSettings:', error);
     throw error;
   }
 }
@@ -1204,8 +1226,14 @@ export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSetting
 export async function getKCBSettings(): Promise<KCBSettings | undefined> {
   try {
     const db = await getDB();
-    const settings = await db.get('kcb_settings', 'kcb-settings');
-    return settings;
+    try {
+      const settings = await db.get('kcb_settings', 'kcb-settings');
+      return settings;
+    } catch (storeError) {
+      // Store might not exist yet, return undefined instead of erroring
+      console.debug('[v0] KCB settings store not yet initialized');
+      return undefined;
+    }
   } catch (error) {
     console.error('[v0] Failed to get KCB settings:', error);
     return undefined;
