@@ -90,7 +90,7 @@ export function POSTerminal() {
   }, [kcbStatus, kcbStartTime]);
 
   const loadData = async () => {
-    const [prods, custs, idbMpesa] = await Promise.all([
+    const [prods, custs, idbKcb] = await Promise.all([
       getAllProducts(),
       getAllCustomers(),
       getKCBSettings(),
@@ -99,24 +99,24 @@ export function POSTerminal() {
     setCustomers(custs);
 
     // Always try Supabase first for KCB settings (authoritative source)
-    let mpesa = idbMpesa;
+    let kcbSettings = idbKcb;
     const supabase = getSupabase();
     if (supabase) {
       const { data } = await supabase
         .from('kcb_settings')
         .select('*')
-        .eq('id', 'mpesa-settings')
+        .eq('id', 'kcb-settings')
         .maybeSingle();
-      if (data) mpesa = data;
+      if (data) kcbSettings = data;
     }
 
-    setKCBEnabled(mpesa?.is_enabled ?? false);
-    setKCBEnvironment(mpesa?.environment ?? 'sandbox');
-    // M-Pesa is "configured" when enabled + has consumer key + secret (minimum to attempt)
-    // passkey and short_code are validated at the edge function level with clear errors
-    const hasCredentials = !!(mpesa?.is_enabled &&
-      mpesa.consumer_key &&
-      mpesa.consumer_secret);
+    setKCBEnabled(kcbSettings?.is_enabled ?? false);
+    setKCBEnvironment(kcbSettings?.environment ?? 'sandbox');
+    // KCB is "configured" when enabled + has client_id + client_secret (minimum to attempt)
+    // passkey is only required in production mode
+    const hasCredentials = !!(kcbSettings?.is_enabled &&
+      kcbSettings.client_id &&
+      kcbSettings.client_secret);
     setKCBConfigured(hasCredentials);
   };
 
@@ -915,7 +915,7 @@ export function POSTerminal() {
                   {[
                     { id: 'cash', icon: Banknote, label: 'Cash' },
                     { id: 'card', icon: CreditCard, label: 'Card' },
-                    { id: 'kcb', icon: Smartphone, label: 'M-Pesa' },
+                    { id: 'kcb', icon: Smartphone, label: 'KCB STK' },
                   ].map(({ id, icon: Icon, label }) => {
                     const isLocked = kcbStatus === 'waiting' || kcbStatus === 'initiating';
                     const isMpesaUnconfigured = id === 'kcb' && !kcbConfigured;
@@ -978,7 +978,7 @@ export function POSTerminal() {
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50 text-white rounded-lg font-bold transition flex items-center justify-center gap-2"
                   >
                     <Smartphone size={20} />
-                    {cart.length === 0 ? 'Add items to cart' : `Charge KES ${cartTotal.toLocaleString()} to M-Pesa`}
+                    {cart.length === 0 ? 'Add items to cart' : `Charge KES ${cartTotal.toLocaleString()} via KCB`}
                   </button>
 
                   {(kcbStatus === 'initiating' || kcbStatus === 'waiting' || kcbStatus === 'checking') && (
