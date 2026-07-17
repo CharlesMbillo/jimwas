@@ -98,18 +98,20 @@ export function POSTerminal() {
       const { data } = await supabase
         .from('kcb_settings')
         .select('*')
-        .eq('id', 'mpesa-settings')
+        .eq('id', 'kcb-settings')
         .maybeSingle();
       if (data) mpesa = data;
     }
 
     setKCBEnabled(mpesa?.is_enabled ?? false);
     setKCBEnvironment(mpesa?.environment ?? 'sandbox');
-    // M-Pesa is "configured" when enabled + has consumer key + secret (minimum to attempt)
-    // passkey and short_code are validated at the edge function level with clear errors
+    // KCB BUNI is "configured" when enabled + has client_id + client_secret
+    // org_shortcode and org_passkey are also required for STK Push requests
     const hasCredentials = !!(mpesa?.is_enabled &&
-      mpesa.consumer_key &&
-      mpesa.consumer_secret);
+      mpesa.client_id &&
+      mpesa.client_secret &&
+      mpesa.org_shortcode &&
+      mpesa.org_passkey);
     setKCBConfigured(hasCredentials);
   };
 
@@ -880,49 +882,56 @@ export function POSTerminal() {
                       {!kcbConfigured && (
                         <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
                           <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                          <div>
+                          <div className="flex-1">
                             <p className="text-amber-300 text-sm font-medium">KCB BUNI not ready</p>
-                            <p className="text-amber-400/80 text-xs mt-0.5">
+                            <p className="text-amber-400/80 text-xs mt-0.5 mb-2">
                               {!kcbEnabled
                                 ? 'Enable KCB BUNI in Settings › Payments'
-                                : 'Add Client ID & Secret in Settings › Payments'}
+                                : 'Complete KCB configuration in Settings › Payments'}
+                            </p>
+                            <p className="text-amber-400/70 text-xs">
+                              Required: Client ID, Client Secret, Org Shortcode, and Org Passkey
                             </p>
                           </div>
                         </div>
                       )}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
-                          {kcbEnvironment === 'sandbox' && (
-                            <button
-                              type="button"
-                              onClick={() => setKCBPhone('254700000000')}
-                              className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
-                            >
-                              <Zap size={11} />
-                              Use test number
-                            </button>
-                          )}
-                        </div>
-                        <input
-                          type="tel"
-                          value={kcbPhone}
-                          onChange={(e) => setKCBPhone(e.target.value)}
-                          placeholder={kcbEnvironment === 'sandbox' ? '254708374149 (test)' : '07XX XXX XXX'}
-                          className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:border-emerald-500 focus:outline-none text-lg"
-                        />
-                        {kcbEnvironment === 'sandbox' && (
-                          <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254708374149 • PIN: any 4 digits</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={handleMpesaPayment}
-                        disabled={!kcbConfigured || !kcbPhone || kcbPhone.length < 9}
-                        className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        <Smartphone size={20} />
-                        Send Payment Request
-                      </button>
+                      {kcbConfigured && (
+                        <>
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
+                              {kcbEnvironment === 'sandbox' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setKCBPhone('254700000000')}
+                                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+                                >
+                                  <Zap size={11} />
+                                  Use test number
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              type="tel"
+                              value={kcbPhone}
+                              onChange={(e) => setKCBPhone(e.target.value)}
+                              placeholder={kcbEnvironment === 'sandbox' ? '254708374149 (test)' : '07XX XXX XXX'}
+                              className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:border-emerald-500 focus:outline-none text-lg"
+                            />
+                            {kcbEnvironment === 'sandbox' && (
+                              <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254708374149 • PIN: any 4 digits</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleMpesaPayment}
+                            disabled={!kcbPhone || kcbPhone.length < 9}
+                            className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            <Smartphone size={20} />
+                            Send Payment Request
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
 
