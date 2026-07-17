@@ -288,11 +288,14 @@ export function POSTerminal() {
 
       // Start polling for completion
       const statusResult = await pollForPaymentCompletion(result.checkoutRequestId, {
-        maxAttempts: 36, // 3 minutes
-        intervalMs: 5000,
+        maxAttempts: 36, // ~5 minutes with exponential backoff
+        intervalMs: 5000, // Initial interval (will increase with backoff)
         onStatusChange: (status) => {
+          // Update UI based on status changes during polling
           if (status.status === 'processing') {
             setKCBStatus('checking');
+          } else if (status.status === 'pending') {
+            setKCBStatus('waiting');
           }
         },
       });
@@ -991,6 +994,7 @@ export function POSTerminal() {
                         <div className="text-sm text-slate-300">
                           {kcbStatus === 'initiating' && <p>Connecting to KCB servers. Please wait...</p>}
                           {kcbStatus === 'waiting' && <p>Check your phone for the KCB STK Push prompt and enter your PIN to confirm payment.</p>}
+                          {kcbStatus === 'checking' && <p>Waiting for payment confirmation from KCB. This may take a few seconds...</p>}
                           {kcbStatus === 'processing' && <p>Payment detected. Verifying transaction with KCB...</p>}
                         </div>
                       </div>

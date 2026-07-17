@@ -70,9 +70,15 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (txError || !mpesaTx) {
+      // Transaction not in DB yet - callback may still be in transit
+      // Return "processing" status instead of error to avoid premature failure
       return new Response(
-        JSON.stringify({ error: "Transaction not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: true,
+          status: "processing",
+          resultDesc: "Waiting for payment confirmation from KCB..."
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
