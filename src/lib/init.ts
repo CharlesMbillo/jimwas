@@ -23,7 +23,7 @@ export async function initializeApp(): Promise<void> {
       // Create all default settings in IndexedDB
       await Promise.all([
         db.put('business_settings', DEFAULT_BUSINESS_SETTINGS, 'default'),
-        db.put('mpesa_settings', DEFAULT_KCB_SETTINGS, 'default'),
+        db.put('kcb_settings', DEFAULT_KCB_SETTINGS, 'kcb-settings'),
         db.put('loyalty_settings', DEFAULT_LOYALTY_SETTINGS, 'default'),
         db.put('receipt_settings', DEFAULT_RECEIPT_SETTINGS, 'default'),
       ]);

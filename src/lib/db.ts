@@ -576,17 +576,18 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
         db.createObjectStore('business_settings', { keyPath: 'id' });
       }
 
-      if (!db.objectStoreNames.contains('mpesa_settings')) {
-        db.createObjectStore('mpesa_settings', { keyPath: 'id' });
+      // KCB settings store (replaces mpesa_settings)
+      if (!db.objectStoreNames.contains('kcb_settings')) {
+        db.createObjectStore('kcb_settings', { keyPath: 'id' });
       }
 
-      // M-Pesa payments store
+      // KCB payments store (replaces mpesa_payments)
       if (!db.objectStoreNames.contains('kcb_payments')) {
-        const mpesaPaymentStore = db.createObjectStore('kcb_payments', { keyPath: 'id' });
-        mpesaPaymentStore.createIndex('by-transaction', 'transaction_id');
-        mpesaPaymentStore.createIndex('by-phone', 'phone');
-        mpesaPaymentStore.createIndex('by-status', 'status');
-        mpesaPaymentStore.createIndex('by-created-at', 'created_at');
+        const kcbPaymentStore = db.createObjectStore('kcb_payments', { keyPath: 'id' });
+        kcbPaymentStore.createIndex('by-transaction', 'transaction_id');
+        kcbPaymentStore.createIndex('by-phone', 'phone');
+        kcbPaymentStore.createIndex('by-status', 'status');
+        kcbPaymentStore.createIndex('by-created-at', 'created_at');
       }
 
       if (!db.objectStoreNames.contains('payment_methods')) {
@@ -1163,41 +1164,52 @@ export async function getBusinessSettings(): Promise<BusinessSettings | undefine
 
 // KCB settings operations
 export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSettings> {
-  const db = await getDB();
-  // Write to IDB optimistically
-  await db.put('kcb_settings', settings);
+  try {
+    const db = await getDB();
+    // Write to IDB optimistically
+    await db.put('kcb_settings', settings);
 
-  // Direct upsert to Supabase — do not go through sync queue for settings
-  const { getSupabase } = await import('./sync');
-  const supabase = getSupabase();
-  if (supabase) {
-    const { error } = await supabase.from('kcb_settings').upsert({
-      id: settings.id,
-      is_enabled: settings.is_enabled,
-      environment: settings.environment,
-      client_id: settings.client_id || null,
-      client_secret: settings.client_secret || null,
-      org_shortcode: settings.org_shortcode || null,
-      org_passkey: settings.org_passkey || null,
-      callback_url: settings.callback_url || null,
-      public_cert_path: settings.public_cert_path || null,
-      default_phone_country_code: settings.default_phone_country_code,
-      last_updated: settings.last_updated,
-      last_updated_by: settings.last_updated_by || null,
-      created_at: settings.created_at,
-      updated_at: settings.updated_at,
-    });
-    if (error) throw new Error(error.message);
+    // Direct upsert to Supabase — do not go through sync queue for settings
+    const { getSupabase } = await import('./sync');
+    const supabase = getSupabase();
+    if (supabase) {
+      const { error } = await supabase.from('kcb_settings').upsert({
+        id: settings.id,
+        is_enabled: settings.is_enabled,
+        environment: settings.environment,
+        client_id: settings.client_id || null,
+        client_secret: settings.client_secret || null,
+        org_shortcode: settings.org_shortcode || null,
+        org_passkey: settings.org_passkey || null,
+        callback_url: settings.callback_url || null,
+        public_cert_path: settings.public_cert_path || null,
+        default_phone_country_code: settings.default_phone_country_code,
+        last_updated: settings.last_updated,
+        last_updated_by: settings.last_updated_by || null,
+        created_at: settings.created_at,
+        updated_at: settings.updated_at,
+      });
+      if (error) throw new Error(error.message);
+    }
+
+    const synced = { ...settings, sync_status: 'synced' as const };
+    await db.put('kcb_settings', synced);
+    return synced;
+  } catch (error) {
+    console.error('[v0] Failed to save KCB settings:', error);
+    throw error;
   }
-
-  const synced = { ...settings, sync_status: 'synced' as const };
-  await db.put('kcb_settings', synced);
-  return synced;
 }
 
 export async function getKCBSettings(): Promise<KCBSettings | undefined> {
-  const db = await getDB();
-  return db.get('kcb_settings', 'kcb-settings');
+  try {
+    const db = await getDB();
+    const settings = await db.get('kcb_settings', 'kcb-settings');
+    return settings;
+  } catch (error) {
+    console.error('[v0] Failed to get KCB settings:', error);
+    return undefined;
+  }
 }
 
 // KCB Payment operations
