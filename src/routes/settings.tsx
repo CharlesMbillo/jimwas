@@ -726,7 +726,7 @@ function PaymentsTab({
                   }`}
                   placeholder="Get from KCB Developer Portal - App Settings"
                 />
-                <p className="text-xs text-slate-500 mt-1">Login to KCB portal > Apps > View Details > App Key</p>
+                <p className="text-xs text-slate-500 mt-1">{"Login to KCB portal > Apps > View Details > App Key"}</p>
               </div>
 
               <div>
@@ -747,7 +747,7 @@ function PaymentsTab({
                     {showSecret ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Login to KCB portal > Apps > View Details > App Secret</p>
+                <p className="text-xs text-slate-500 mt-1">{"Login to KCB portal > Apps > View Details > App Secret"}</p>
               </div>
 
               <div>
@@ -763,7 +763,7 @@ function PaymentsTab({
                   }`}
                   placeholder="KCB Pass Key for BUNI (STK Push authentication)"
                 />
-                <p className="text-xs text-slate-500 mt-1">From KCB portal: Settings > Security > BUNI Pass Key</p>
+                <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Settings > Security > BUNI Pass Key"}</p>
               </div>
             </div>
 
@@ -790,7 +790,7 @@ function PaymentsTab({
                     }`}
                     placeholder="e.g. JIMWAS, MYSTORE"
                   />
-                  <p className="text-xs text-slate-500 mt-1">From KCB portal: Business Settings > Organization Code</p>
+                    <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Business Settings > Organization Code"}</p>
                 </div>
               </div>
             </div>
