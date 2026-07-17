@@ -91,12 +91,12 @@ export function POSTerminal() {
     setProducts(prods.filter(p => p.is_active));
     setCustomers(custs);
 
-    // Always try Supabase first for M-Pesa settings (authoritative source)
+    // Always try Supabase first for KCB settings (authoritative source)
     let mpesa = idbMpesa;
     const supabase = getSupabase();
     if (supabase) {
       const { data } = await supabase
-        .from('mpesa_settings')
+        .from('kcb_settings')
         .select('*')
         .eq('id', 'mpesa-settings')
         .maybeSingle();
@@ -247,13 +247,13 @@ export function POSTerminal() {
     setDepositAmount(0);
   };
 
-  // Handle M-Pesa STK Push
+  // Handle KCB BUNI STK Push
   const handleMpesaPayment = async () => {
     if (!kcbConfigured) {
       setKCBStatus('failed');
       setKCBError(kcbEnabled
-        ? 'M-Pesa API credentials not configured. Go to Settings > Payments to add Consumer Key, Secret, Passkey, and Short Code.'
-        : 'M-Pesa is not enabled. Go to Settings > Payments to enable it.');
+        ? 'KCB BUNI API credentials not configured. Go to Settings > Payments to add Client ID, Secret, and Pass Key.'
+        : 'KCB BUNI is not enabled. Go to Settings > Payments to enable it.');
       return;
     }
 
@@ -271,18 +271,18 @@ export function POSTerminal() {
         cashierId: user?.id,
         cashierName: user?.name,
         accountReference: `POS-${Date.now()}`,
-        transactionDesc: 'POS Purchase',
+        transactionDesc: 'KCB BUNI POS Payment',
       });
 
       if (!result.success || !result.checkoutRequestId) {
         setKCBStatus('failed');
-        setKCBError(result.error || 'Failed to initiate payment');
+        setKCBError(result.error || 'Failed to initiate KCB payment');
         return;
       }
 
       setKCBCheckoutId(result.checkoutRequestId);
       setKCBStatus('waiting');
-      toast.show('Payment request sent. Check your phone for M-Pesa prompt.');
+      toast.show('KCB payment request sent. Check your phone for STK Push prompt.');
 
       // Start polling for completion
       const statusResult = await pollForPaymentCompletion(result.checkoutRequestId, {
@@ -298,7 +298,7 @@ export function POSTerminal() {
       if (statusResult.status === 'success') {
         setKCBStatus('success');
         setKCBReceiptNumber(statusResult.kcbReceiptNumber || null);
-        toast.show('Payment successful!');
+        toast.show('KCB payment successful!');
         // Auto-complete the sale
         await completeMpesaSale(statusResult.kcbReceiptNumber);
       } else if (statusResult.status === 'cancelled') {
@@ -306,26 +306,26 @@ export function POSTerminal() {
         setKCBError('Payment was cancelled by user');
       } else if (statusResult.status === 'timeout') {
         setKCBStatus('failed');
-        setKCBError('Payment timed out. Please try again.');
+        setKCBError('KCB payment timed out. Please try again.');
       } else if (statusResult.status === 'insufficient_balance') {
         setKCBStatus('failed');
-        setKCBError('Insufficient M-Pesa balance');
+        setKCBError('Insufficient M-Pesa balance on account');
       } else {
         setKCBStatus('failed');
-        setKCBError(statusResult.resultDesc || 'Payment failed');
+        setKCBError(statusResult.resultDesc || 'KCB payment failed');
       }
     } catch (error) {
       setKCBStatus('failed');
-      setKCBError(error instanceof Error ? error.message : 'An error occurred');
+      setKCBError(error instanceof Error ? error.message : 'KCB payment error occurred');
     }
   };
 
-  // Sandbox only: simulate a payment via Daraja simulate endpoint
+  // Sandbox only: simulate a KCB BUNI payment for testing
   const handleSimulatePayment = async () => {
     if (kcbEnvironment !== 'sandbox') return;
     setKCBSimulating(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-simulate`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kcb-simulate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -343,27 +343,27 @@ export function POSTerminal() {
       try {
         const text = await response.text();
         if (!text) {
-          setKCBError('Empty response from M-Pesa service');
+          setKCBError('Empty response from KCB sandbox service');
           return;
         }
         data = JSON.parse(text);
       } catch (parseError) {
         console.error('[v0] JSON parse error:', parseError);
-        setKCBError('Invalid response from M-Pesa service');
+        setKCBError('Invalid response from KCB sandbox service');
         return;
       }
 
       if (!response.ok || !data.success) {
-        setKCBError(data?.error || 'Simulation failed');
+        setKCBError(data?.error || 'KCB sandbox simulation failed');
         return;
       }
       // Directly mark as success — don't rely on polling
       setKCBReceiptNumber(data.receiptNumber);
       setKCBStatus('success');
-      toast.show('Payment simulated successfully!');
+      toast.show('KCB sandbox payment simulated successfully!');
       await completeMpesaSale(data.receiptNumber);
     } catch (error) {
-      setKCBError(error instanceof Error ? error.message : 'Simulation failed');
+      setKCBError(error instanceof Error ? error.message : 'KCB sandbox simulation failed');
     } finally {
       setKCBSimulating(false);
     }
@@ -864,14 +864,14 @@ export function POSTerminal() {
                 </div>
               </div>
 
-              {/* M-Pesa STK Push Section */}
+              {/* KCB BUNI STK Push Section */}
               {paymentMethod === 'kcb' && (
                 <div className="bg-slate-700 rounded-lg p-4 space-y-4">
                   {/* Sandbox badge */}
                   {kcbEnvironment === 'sandbox' && (
                     <div className="flex items-center gap-2 bg-blue-900/40 border border-blue-700 rounded-lg px-3 py-2">
                       <FlaskConical size={14} className="text-blue-400" />
-                      <span className="text-blue-300 text-xs font-semibold">SANDBOX / UAT MODE</span>
+                      <span className="text-blue-300 text-xs font-semibold">KCB SANDBOX / TESTING MODE</span>
                       <span className="text-blue-400/70 text-xs ml-auto">No real money moves</span>
                     </div>
                   )}
@@ -881,22 +881,22 @@ export function POSTerminal() {
                         <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
                           <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-amber-300 text-sm font-medium">M-Pesa not ready</p>
+                            <p className="text-amber-300 text-sm font-medium">KCB BUNI not ready</p>
                             <p className="text-amber-400/80 text-xs mt-0.5">
                               {!kcbEnabled
-                                ? 'Enable M-Pesa in Settings › Payments'
-                                : 'Add Consumer Key & Secret in Settings › Payments'}
+                                ? 'Enable KCB BUNI in Settings › Payments'
+                                : 'Add Client ID & Secret in Settings › Payments'}
                             </p>
                           </div>
                         </div>
                       )}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm text-slate-400">M-Pesa Phone Number</label>
+                          <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
                           {kcbEnvironment === 'sandbox' && (
                             <button
                               type="button"
-                              onClick={() => setKCBPhone('254708374149')}
+                              onClick={() => setKCBPhone('254700000000')}
                               className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
                             >
                               <Zap size={11} />
@@ -1009,7 +1009,7 @@ export function POSTerminal() {
                               Simulate Success
                             </button>
                           </div>
-                          <p className="text-blue-400/60 text-[10px] mt-1.5">Triggers Daraja sandbox simulate endpoint to mark this payment as successful</p>
+                          <p className="text-blue-400/60 text-[10px] mt-1.5">Simulates KCB sandbox payment to mark this transaction as successful for testing</p>
                         </div>
                       )}
                     </div>
@@ -1029,7 +1029,7 @@ export function POSTerminal() {
 
                         {kcbReceiptNumber && (
                           <div className="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center">
-                            <span className="text-slate-400 text-sm">M-Pesa Receipt</span>
+                            <span className="text-slate-400 text-sm">KCB Receipt Number</span>
                             <span className="text-white font-mono font-bold">{kcbReceiptNumber}</span>
                           </div>
                         )}
@@ -1094,7 +1094,7 @@ export function POSTerminal() {
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <FlaskConical size={14} className="text-blue-400" />
-                              <p className="text-blue-300 text-xs font-medium">Sandbox: simulate a successful payment</p>
+                              <p className="text-blue-300 text-xs font-medium">KCB Sandbox: simulate successful payment</p>
                             </div>
                             <button
                               onClick={handleSimulatePayment}
