@@ -711,7 +711,8 @@ function PaymentsTab({
           const missing = [];
           if (!kcbSettings.client_id) missing.push('Consumer Key');
           if (!kcbSettings.client_secret) missing.push('Consumer Secret');
-          if (!kcbSettings.passkey) missing.push('Passkey');
+          if (!kcbSettings.org_passkey) missing.push('Organization Pass Key');
+          if (kcbSettings.environment === 'production' && !kcbSettings.passkey) missing.push('Initiator Passkey');
           if (!kcbSettings.org_shortcode && !kcbSettings.org_passkey) missing.push('Short Code or Till Number');
           if (missing.length > 0) {
             return (
@@ -787,7 +788,7 @@ function PaymentsTab({
 
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">
-                  Pass Key <span className="text-red-400">*</span>
+                  Organization Pass Key <span className="text-red-400">*</span>
                 </label>
                 <input
                   type={showSecret ? 'text' : 'password'}
@@ -796,9 +797,25 @@ function PaymentsTab({
                   className={`w-full px-4 py-3 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
                     !kcbSettings.org_passkey ? 'border-amber-600' : 'border-slate-600'
                   }`}
-                  placeholder="KCB Pass Key for BUNI (STK Push authentication)"
+                  placeholder="KCB Organization Pass Key for BUNI (STK Push authentication)"
                 />
-                <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Settings > Security > BUNI Pass Key"}</p>
+                <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Settings > Security > Organization BUNI Pass Key"}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-1.5">
+                  Initiator Passkey <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type={showSecret ? 'text' : 'password'}
+                  value={kcbSettings.passkey || ''}
+                  onChange={(e) => onMpesaChange({ ...kcbSettings, passkey: e.target.value })}
+                  className={`w-full px-4 py-3 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
+                    !kcbSettings.passkey ? 'border-amber-600' : 'border-slate-600'
+                  }`}
+                  placeholder="Initiator Passkey for STK Push authentication"
+                />
+                <p className="text-xs text-slate-500 mt-1">{"From Safaricom portal: Security > Initiator Passkey (used for production)"}</p>
               </div>
             </div>
 
