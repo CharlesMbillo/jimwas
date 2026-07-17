@@ -129,7 +129,11 @@ export function SettingsPage() {
       ]);
 
       if (loadedBusiness ?? idbBusiness) setBusinessSettings((loadedBusiness ?? idbBusiness)!);
-      if (loadedMpesa ?? idbMpesa) setKCBSettings((loadedMpesa ?? idbMpesa)!);
+      if (loadedMpesa ?? idbMpesa) {
+        // Merge loaded settings with defaults to ensure all fields are present
+        const merged = { ...DEFAULT_KCB_SETTINGS, ...(loadedMpesa ?? idbMpesa)! };
+        setKCBSettings(merged);
+      }
       const finalPayments = loadedPayments.length ? loadedPayments : idbPayments;
       if (finalPayments.length > 0) setPaymentMethods(finalPayments);
       if (loadedLoyalty ?? idbLoyalty) setLoyaltySettings((loadedLoyalty ?? idbLoyalty)!);
