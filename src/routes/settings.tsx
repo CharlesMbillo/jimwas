@@ -129,9 +129,9 @@ export function SettingsPage() {
       ]);
 
       if (loadedBusiness ?? idbBusiness) setBusinessSettings((loadedBusiness ?? idbBusiness)!);
-      if (loadedMpesa ?? idbMpesa) {
+      {
         // Merge loaded settings with defaults to ensure all fields are present
-        const merged = { ...DEFAULT_KCB_SETTINGS, ...(loadedMpesa ?? idbMpesa)! };
+        const merged = { ...DEFAULT_KCB_SETTINGS, ...(loadedMpesa ?? idbMpesa) };
         setKCBSettings(merged);
       }
       const finalPayments = loadedPayments.length ? loadedPayments : idbPayments;
