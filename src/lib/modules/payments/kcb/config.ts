@@ -1,34 +1,82 @@
 /**
  * KCB Configuration Manager
- * Loads and validates environment configuration
+ * Loads and validates configuration from Supabase settings
+ * (Vite frontend app - no server-side env vars available)
  */
 
 import type { KCBConfig } from './types';
+import type { KCBSettings } from '../../settings-types';
 import { KCB_API_DEFAULTS } from './constants';
+import { getSupabase } from '../../../sync';
 
 class ConfigManager {
   private config: KCBConfig | null = null;
   private validated = false;
+  private supabaseSettings: KCBSettings | null = null;
+
+  /**
+   * Load KCB settings from Supabase (only done once)
+   */
+  async loadSupabaseSettings(): Promise<KCBSettings> {
+    if (this.supabaseSettings) {
+      return this.supabaseSettings;
+    }
+
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      const { data, error } = await supabase
+        .from('kcb_settings')
+        .select('*')
+        .eq('id', 'kcb-settings')
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to load KCB settings: ${error.message}`);
+      }
+
+      if (!data) {
+        throw new Error('KCB settings not found in database');
+      }
+
+      this.supabaseSettings = data as KCBSettings;
+      return this.supabaseSettings;
+    } catch (error) {
+      console.error('[v0] Failed to load KCB Supabase settings:', error);
+      throw error;
+    }
+  }
 
   /**
    * Get the current KCB configuration
-   * Validates and caches configuration on first call
+   * Must call loadSupabaseSettings() first
    */
   getConfig(): KCBConfig {
+    if (!this.supabaseSettings) {
+      throw new Error('KCB settings not loaded. Call loadSupabaseSettings() first.');
+    }
+
     if (this.config && this.validated) {
       return this.config;
     }
 
+    const settings = this.supabaseSettings;
+
     this.config = {
-      baseUrl: this.getEnv('KCB_BASE_URL'),
-      clientId: this.getEnv('KCB_CLIENT_ID'),
-      clientSecret: this.getEnv('KCB_CLIENT_SECRET'),
-      routeCode: this.getEnv('KCB_ROUTE_CODE', '207'),
-      sharedShortcode: this.getEnv('KCB_SHARED_SHORTCODE', 'true') === 'true',
-      orgShortcode: this.getEnv('KCB_ORG_SHORTCODE'),
-      orgPasskey: this.getEnv('KCB_ORG_PASSKEY'),
-      callbackUrl: this.getEnv('KCB_CALLBACK_URL'),
-      publicCertPath: this.getEnv('KCB_PUBLIC_CERT_PATH'),
+      baseUrl: settings.environment === 'production' 
+        ? 'https://api.safaricom.co.ke/api'
+        : 'https://sandbox.safaricom.co.ke/api',
+      clientId: settings.client_id,
+      clientSecret: settings.client_secret,
+      routeCode: '207',
+      sharedShortcode: true,
+      orgShortcode: settings.org_shortcode,
+      orgPasskey: settings.org_passkey,
+      callbackUrl: settings.callback_url || 'https://jimwas.app/api/kcb/callback',
+      publicCertPath: settings.public_cert_path || '',
       tokenCacheTTL: KCB_API_DEFAULTS.TOKEN_CACHE_TTL,
       requestTimeout: KCB_API_DEFAULTS.REQUEST_TIMEOUT,
       maxRetries: KCB_API_DEFAULTS.MAX_RETRIES,
@@ -42,19 +90,6 @@ class ConfigManager {
   }
 
   /**
-   * Get a single environment variable with optional default
-   */
-  private getEnv(key: string, defaultValue?: string): string {
-    const value = import.meta.env[`VITE_${key}`] || process.env[key];
-
-    if (!value && !defaultValue) {
-      throw new Error(`Missing required environment variable: ${key}`);
-    }
-
-    return value || defaultValue || '';
-  }
-
-  /**
    * Validate configuration values
    */
   private validateConfig(): void {
@@ -64,36 +99,20 @@ class ConfigManager {
 
     const errors: string[] = [];
 
-    if (!this.config.baseUrl) {
-      errors.push('KCB_BASE_URL is required');
-    } else if (!this.isValidUrl(this.config.baseUrl)) {
-      errors.push('KCB_BASE_URL must be a valid URL');
+    if (!this.config.clientId) {
+      errors.push('Client ID is required');
     }
 
-    if (!this.config.clientId || this.config.clientId.length < 10) {
-      errors.push('KCB_CLIENT_ID is required and must be at least 10 characters');
-    }
-
-    if (!this.config.clientSecret || this.config.clientSecret.length < 10) {
-      errors.push('KCB_CLIENT_SECRET is required and must be at least 10 characters');
+    if (!this.config.clientSecret) {
+      errors.push('Client Secret is required');
     }
 
     if (!this.config.orgShortcode) {
-      errors.push('KCB_ORG_SHORTCODE is required');
+      errors.push('Organization Shortcode is required');
     }
 
     if (!this.config.orgPasskey) {
-      errors.push('KCB_ORG_PASSKEY is required');
-    }
-
-    if (!this.config.callbackUrl) {
-      errors.push('KCB_CALLBACK_URL is required');
-    } else if (!this.isValidUrl(this.config.callbackUrl)) {
-      errors.push('KCB_CALLBACK_URL must be a valid URL');
-    }
-
-    if (!this.config.publicCertPath) {
-      errors.push('KCB_PUBLIC_CERT_PATH is required');
+      errors.push('Organization Passkey is required');
     }
 
     if (errors.length > 0) {
@@ -138,7 +157,21 @@ class ConfigManager {
 export const configManager = new ConfigManager();
 
 /**
+ * Initialize KCB configuration from Supabase
+ * Must be called before using getKCBConfig()
+ */
+export async function initializeKCBConfig(): Promise<void> {
+  try {
+    await configManager.loadSupabaseSettings();
+  } catch (error) {
+    console.error('[v0] Failed to initialize KCB config:', error);
+    throw error;
+  }
+}
+
+/**
  * Convenience function to get config
+ * Assumes initializeKCBConfig() has been called
  */
 export function getKCBConfig(): KCBConfig {
   return configManager.getConfig();
@@ -148,5 +181,10 @@ export function getKCBConfig(): KCBConfig {
  * Check if KCB is properly configured
  */
 export function isKCBConfigured(): boolean {
-  return configManager.isValid();
+  try {
+    configManager.getConfig();
+    return true;
+  } catch {
+    return false;
+  }
 }

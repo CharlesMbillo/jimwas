@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Smartphone, Loader2, CheckCircle2, XCircle, AlertCircle, Clock } from 'lucide-react';
 import { useToast } from './Toast';
 import { KCBClient } from '../lib/modules/payments/kcb/client';
+import { initializeKCBConfig } from '../lib/modules/payments/kcb/config';
 import {
   saveKCBPaymentTransaction,
   updateKCBTransactionStatus,
@@ -92,6 +93,9 @@ export function KCBPaymentModal({
     setIsProcessing(true);
 
     try {
+      // Initialize KCB config from Supabase settings
+      await initializeKCBConfig();
+      
       const client = new KCBClient();
       const formattedPhone = formatPhoneNumber(phoneNumber);
 
@@ -143,11 +147,21 @@ export function KCBPaymentModal({
       setStep('polling');
       startPollingForStatus(tx.id);
     } catch (error) {
-      console.error('[v0] Payment initiation error:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to initiate payment');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to initiate payment';
+      console.error('[v0] Payment initiation error:', errorMsg, error);
+      
+      // Provide helpful error messages
+      let displayError = errorMsg;
+      if (errorMsg.includes('not loaded') || errorMsg.includes('settings not found')) {
+        displayError = 'KCB settings not configured. Please check Settings > Payments > KCB configuration.';
+      } else if (errorMsg.includes('Missing required') || errorMsg.includes('validation failed')) {
+        displayError = 'KCB configuration incomplete. Ensure all required fields are filled in Settings > Payments.';
+      }
+      
+      setErrorMessage(displayError);
       setStep('failed');
       setIsProcessing(false);
-      toast.show('Payment initiation failed', 'error');
+      toast.show(displayError, 'error');
     }
   };
 
