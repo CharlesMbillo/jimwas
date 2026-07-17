@@ -18,18 +18,16 @@ export interface BusinessSettings {
   sync_status: 'pending' | 'synced';
 }
 
-export interface MpesaSettings {
+export interface KCBSettings {
   id: string;
   is_enabled: boolean;
   environment: 'sandbox' | 'production';
-  consumer_key: string;
-  consumer_secret: string;
-  passkey: string;
-  short_code: string;
-  till_number?: string;
+  client_id: string;
+  client_secret: string;
+  org_shortcode: string;
+  org_passkey: string;
   callback_url?: string;
-  timeout_url?: string;
-  result_url?: string;
+  public_cert_path?: string;
   default_phone_country_code: string;
   last_updated: string;
   last_updated_by?: string;
@@ -40,7 +38,7 @@ export interface MpesaSettings {
 
 export interface PaymentMethodConfig {
   id: string;
-  method_name: 'cash' | 'card' | 'mpesa' | 'bank_transfer';
+  method_name: 'cash' | 'card' | 'kcb' | 'bank_transfer';
   is_enabled: boolean;
   display_name: string;
   requires_reference: boolean;
@@ -107,19 +105,17 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   sync_status: 'pending',
 };
 
-export const DEFAULT_MPESA_SETTINGS: MpesaSettings = {
-  id: 'mpesa-settings',
+export const DEFAULT_KCB_SETTINGS: KCBSettings = {
+  id: 'kcb-settings',
   is_enabled: false,
   environment: 'sandbox',
-  consumer_key: '',
-  consumer_secret: '',
-  passkey: '',
-  short_code: '',
-  till_number: '',
+  client_id: '',
+  client_secret: '',
+  org_shortcode: '',
+  org_passkey: '',
   default_phone_country_code: '254',
   callback_url: '',
-  timeout_url: '',
-  result_url: '',
+  public_cert_path: '',
   last_updated: new Date().toISOString(),
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -157,7 +153,7 @@ export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
 
 export const DEFAULT_PAYMENT_METHODS: PaymentMethodConfig[] = [
   { id: 'pm-cash', method_name: 'cash', is_enabled: true, display_name: 'Cash', requires_reference: false, display_order: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 'pm-mpesa', method_name: 'mpesa', is_enabled: true, display_name: 'M-Pesa', requires_reference: true, display_order: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'pm-kcb', method_name: 'kcb', is_enabled: true, display_name: 'KCB MpesaExpressAPI', requires_reference: true, display_order: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   { id: 'pm-card', method_name: 'card', is_enabled: true, display_name: 'Card', requires_reference: false, display_order: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   { id: 'pm-bank', method_name: 'bank_transfer', is_enabled: false, display_name: 'Bank Transfer', requires_reference: true, display_order: 4, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
 ];

@@ -4,13 +4,13 @@ import {
   Smartphone, Search, Filter, Download, RefreshCw, CheckCircle2, XCircle, Clock, AlertCircle, 
   Loader2, ChevronDown, ChevronUp, Eye, Calendar, TrendingUp
 } from 'lucide-react';
-import { getAllMpesaPayments, getMpesaPaymentsByStatus } from '../lib/db';
-import type { MpesaPaymentRecord } from '../lib/db';
+import { getAllKCBPayments, getKCBPaymentsByStatus } from '../lib/db';
+import type { KCBPaymentRecord } from '../lib/db';
 import { formatPhoneDisplay } from '../lib/mpesa';
 
 type FilterStatus = 'all' | 'pending' | 'processing' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'insufficient_balance';
 
-const STATUS_COLORS: Record<MpesaPaymentRecord['status'], string> = {
+const STATUS_COLORS: Record<KCBPaymentRecord['status'], string> = {
   'pending': 'bg-gray-100 text-gray-800',
   'processing': 'bg-blue-100 text-blue-800',
   'success': 'bg-green-100 text-green-800',
@@ -20,7 +20,7 @@ const STATUS_COLORS: Record<MpesaPaymentRecord['status'], string> = {
   'insufficient_balance': 'bg-purple-100 text-purple-800',
 };
 
-const STATUS_ICONS: Record<MpesaPaymentRecord['status'], React.ReactNode> = {
+const STATUS_ICONS: Record<KCBPaymentRecord['status'], React.ReactNode> = {
   'pending': <Clock className="w-4 h-4" />,
   'processing': <Loader2 className="w-4 h-4 animate-spin" />,
   'success': <CheckCircle2 className="w-4 h-4" />,
@@ -32,8 +32,8 @@ const STATUS_ICONS: Record<MpesaPaymentRecord['status'], React.ReactNode> = {
 
 export function MpesaPaymentsPage() {
   const { user } = useAuth();
-  const [payments, setPayments] = useState<MpesaPaymentRecord[]>([]);
-  const [filteredPayments, setFilteredPayments] = useState<MpesaPaymentRecord[]>([]);
+  const [payments, setPayments] = useState<KCBPaymentRecord[]>([]);
+  const [filteredPayments, setFilteredPayments] = useState<KCBPaymentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -52,7 +52,7 @@ export function MpesaPaymentsPage() {
   const loadPayments = async () => {
     setIsLoading(true);
     try {
-      const data = await getAllMpesaPayments();
+      const data = await getAllKCBPayments();
       const sorted = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setPayments(sorted);
     } catch (error) {

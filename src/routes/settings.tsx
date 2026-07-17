@@ -10,12 +10,12 @@ import {
 } from 'lucide-react';
 import {
   BusinessSettings,
-  MpesaSettings,
+  KCBSettings,
   PaymentMethodConfig,
   LoyaltySettings,
   ReceiptSettings,
   DEFAULT_BUSINESS_SETTINGS,
-  DEFAULT_MPESA_SETTINGS,
+  DEFAULT_KCB_SETTINGS,
   DEFAULT_LOYALTY_SETTINGS,
   DEFAULT_RECEIPT_SETTINGS,
   DEFAULT_PAYMENT_METHODS,
@@ -23,8 +23,8 @@ import {
 import {
   saveBusinessSettings,
   getBusinessSettings,
-  saveMpesaSettings,
-  getMpesaSettings,
+  saveKCBSettings,
+  getKCBSettings,
   getAllPaymentMethods,
   savePaymentMethod,
   saveLoyaltySettings,
@@ -49,7 +49,7 @@ export function SettingsPage() {
 
   // Settings state
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(DEFAULT_BUSINESS_SETTINGS);
-  const [mpesaSettings, setMpesaSettings] = useState<MpesaSettings>(DEFAULT_MPESA_SETTINGS);
+  const [kcbSettings, setKCBSettings] = useState<KCBSettings>(DEFAULT_KCB_SETTINGS);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(DEFAULT_PAYMENT_METHODS);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings>(DEFAULT_LOYALTY_SETTINGS);
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings>(DEFAULT_RECEIPT_SETTINGS);
@@ -58,13 +58,39 @@ export function SettingsPage() {
   // Modal states
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [showMpesaSecret, setShowMpesaSecret] = useState(false);
+  const [showKCBSecret, setShowKCBSecret] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadAllSettings();
   }, []);
+
+  // Auto-save KCB settings with debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      // Only auto-save if settings have changed and are not in default state
+      if (kcbSettings.sync_status === 'pending' && (kcbSettings.client_id || kcbSettings.client_secret || kcbSettings.org_shortcode)) {
+        try {
+          setAutoSaving(true);
+          await saveKCBSettings({
+            ...kcbSettings,
+            last_updated: new Date().toISOString(),
+            last_updated_by: user?.id,
+            updated_at: new Date().toISOString(),
+            sync_status: 'pending' as const,
+          });
+        } catch (error) {
+          console.error('[v0] Auto-save failed for KCB settings:', error);
+        } finally {
+          setAutoSaving(false);
+        }
+      }
+    }, 3000); // 3 second debounce
+
+    return () => clearTimeout(timer);
+  }, [kcbSettings, user?.id]);
 
   const loadAllSettings = async () => {
     setIsLoading(true);
@@ -72,7 +98,7 @@ export function SettingsPage() {
       // Try Supabase first (authoritative), fall back to IDB
       const supabase = getSupabase();
       let loadedBusiness: BusinessSettings | undefined,
-          loadedMpesa: MpesaSettings | undefined,
+          loadedMpesa: KCBSettings | undefined,
           loadedPayments: PaymentMethodConfig[] = [],
           loadedLoyalty: LoyaltySettings | undefined,
           loadedReceipt: ReceiptSettings | undefined;
@@ -80,7 +106,7 @@ export function SettingsPage() {
       if (supabase) {
         const [biz, mpesa, payments, loyalty, receipt] = await Promise.all([
           supabase.from('business_settings').select('*').eq('id', 'business-settings').maybeSingle(),
-          supabase.from('mpesa_settings').select('*').eq('id', 'mpesa-settings').maybeSingle(),
+          supabase.from('kcb_settings').select('*').eq('id', 'kcb-settings').maybeSingle(),
           supabase.from('payment_methods').select('*').order('display_order'),
           supabase.from('loyalty_settings').select('*').eq('id', 'loyalty-settings').maybeSingle(),
           supabase.from('receipt_settings').select('*').eq('id', 'receipt-settings').maybeSingle(),
@@ -95,7 +121,7 @@ export function SettingsPage() {
       // Fall back to IDB if Supabase returned nothing
       const [idbBusiness, idbMpesa, idbPayments, idbLoyalty, idbReceipt, idbUsers] = await Promise.all([
         getBusinessSettings(),
-        getMpesaSettings(),
+        getKCBSettings(),
         getAllPaymentMethods(),
         getLoyaltySettings(),
         getReceiptSettings(),
@@ -103,7 +129,7 @@ export function SettingsPage() {
       ]);
 
       if (loadedBusiness ?? idbBusiness) setBusinessSettings((loadedBusiness ?? idbBusiness)!);
-      if (loadedMpesa ?? idbMpesa) setMpesaSettings((loadedMpesa ?? idbMpesa)!);
+      if (loadedMpesa ?? idbMpesa) setKCBSettings((loadedMpesa ?? idbMpesa)!);
       const finalPayments = loadedPayments.length ? loadedPayments : idbPayments;
       if (finalPayments.length > 0) setPaymentMethods(finalPayments);
       if (loadedLoyalty ?? idbLoyalty) setLoyaltySettings((loadedLoyalty ?? idbLoyalty)!);
@@ -142,17 +168,23 @@ export function SettingsPage() {
     setSaving(true);
     try {
       const settingsToSave = {
-        ...mpesaSettings,
+        ...kcbSettings,
         last_updated: new Date().toISOString(),
         last_updated_by: user?.id,
         updated_at: new Date().toISOString(),
         sync_status: 'pending' as const,
       };
-      const saved = await saveMpesaSettings(settingsToSave);
-      setMpesaSettings(saved ?? settingsToSave);
-      showMessage('success', 'M-Pesa settings saved successfully');
+      const saved = await saveKCBSettings(settingsToSave);
+      if (saved) {
+        setKCBSettings(saved);
+        showMessage('success', 'KCB STK settings saved to IndexedDB and syncing to cloud');
+      } else {
+        setKCBSettings(settingsToSave);
+        showMessage('success', 'KCB STK settings saved locally (sync pending)');
+      }
     } catch (error) {
-      showMessage('error', 'Failed to save M-Pesa settings');
+      console.error('[v0] Save error:', error);
+      showMessage('error', error instanceof Error ? error.message : 'Failed to save KCB settings');
     } finally {
       setSaving(false);
     }
@@ -284,14 +316,15 @@ export function SettingsPage() {
 
         {activeTab === 'payments' && (
           <PaymentsTab
-            mpesaSettings={mpesaSettings}
+            kcbSettings={kcbSettings}
             paymentMethods={paymentMethods}
-            onMpesaChange={setMpesaSettings}
+            onMpesaChange={setKCBSettings}
             onTogglePayment={togglePaymentMethod}
             onSaveMpesa={saveMpesa}
             saving={saving}
-            showSecret={showMpesaSecret}
-            onToggleSecret={() => setShowMpesaSecret(!showMpesaSecret)}
+            autoSaving={autoSaving}
+            showSecret={showKCBSecret}
+            onToggleSecret={() => setShowKCBSecret(!showKCBSecret)}
           />
         )}
 
@@ -554,21 +587,23 @@ function UsersTab({
 
 // ============ PAYMENTS TAB ============
 function PaymentsTab({
-  mpesaSettings,
+  kcbSettings,
   paymentMethods,
   onMpesaChange,
   onTogglePayment,
   onSaveMpesa,
   saving,
+  autoSaving,
   showSecret,
   onToggleSecret,
 }: {
-  mpesaSettings: MpesaSettings;
+  kcbSettings: KCBSettings;
   paymentMethods: PaymentMethodConfig[];
-  onMpesaChange: (s: MpesaSettings) => void;
+  onMpesaChange: (s: KCBSettings) => void;
   onTogglePayment: (m: PaymentMethodConfig) => void;
   onSaveMpesa: () => void;
   saving: boolean;
+  autoSaving: boolean;
   showSecret: boolean;
   onToggleSecret: () => void;
 }) {
@@ -607,63 +642,64 @@ function PaymentsTab({
         </div>
       </div>
 
-      {/* M-Pesa STK Push Settings */}
+      {/* KCB MpesaExpressAPI STK Push Settings */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
             <Smartphone size={20} />
-            M-Pesa STK Push Settings
+            KCB MpesaExpressAPI STK Push Settings
           </h2>
           <label className="flex items-center gap-2 cursor-pointer">
             <span className="text-slate-400">Enabled</span>
             <button
-              onClick={() => onMpesaChange({ ...mpesaSettings, is_enabled: !mpesaSettings.is_enabled })}
+              onClick={() => onMpesaChange({ ...kcbSettings, is_enabled: !kcbSettings.is_enabled })}
               className={`p-1 rounded-lg transition ${
-                mpesaSettings.is_enabled
+                kcbSettings.is_enabled
                   ? 'bg-emerald-600 text-white'
                   : 'bg-slate-600 text-slate-400'
               }`}
             >
-              {mpesaSettings.is_enabled ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+              {kcbSettings.is_enabled ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
             </button>
           </label>
         </div>
 
-        {/* Sandbox quick-fill banner */}
-        {mpesaSettings.environment === 'sandbox' && (
+        {/* KCB Sandbox quick-fill banner */}
+        {kcbSettings.environment === 'sandbox' && (
           <div className="mb-4 bg-blue-950/60 border border-blue-700 rounded-xl p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <FlaskConical size={15} className="text-blue-400" />
-                  <span className="text-blue-300 text-sm font-semibold">Daraja Sandbox (UAT) Mode</span>
-                  <span className="bg-blue-700 text-blue-100 text-[10px] px-2 py-0.5 rounded-full font-medium">TESTING</span>
+                  <span className="text-blue-300 text-sm font-semibold">KCB MpesaExpressAPI STK Push (BUNI)</span>
+                  <span className="bg-blue-700 text-blue-100 text-[10px] px-2 py-0.5 rounded-full font-medium">SANDBOX TESTING</span>
                 </div>
                 <p className="text-blue-400/80 text-xs mb-3">
-                  Use Safaricom's official sandbox credentials for UAT testing. No real money moves.
-                  Test phone: <span className="font-mono text-blue-300">254708374149</span> (any 4-digit PIN).
+                  Use KCB's sandbox credentials for UAT testing. No real money moves.
+                  Test phone: <span className="font-mono text-blue-300">254700000000</span> (any 4-digit PIN).
                 </p>
                 <button
                   type="button"
                   onClick={() => onMpesaChange({
-                    ...mpesaSettings,
+                    ...kcbSettings,
                     is_enabled: true,
                     environment: 'sandbox',
-                    short_code: '174379',
-                    till_number: '',
-                    passkey: 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919',
+                    org_shortcode: 'JIMWAS',
+                    org_passkey: '',
+                    client_id: '',
+                    client_secret: '',
                   })}
                   className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
                 >
                   <Zap size={13} />
-                  Fill Daraja Sandbox Credentials
+                  Setup KCB Sandbox (BUNI) Testing
                 </button>
               </div>
               <div className="hidden md:block text-right shrink-0">
                 <p className="text-blue-500 text-[10px] font-mono space-y-0.5">
-                  <span className="block">ShortCode: 174379</span>
-                  <span className="block">Type: CustomerPayBillOnline</span>
-                  <span className="block">Passkey: bfb279...919</span>
+                  <span className="block">Environment: Sandbox</span>
+                  <span className="block">API: KCB BUNI</span>
+                  <span className="block">Mode: STK Push</span>
                 </p>
               </div>
             </div>
@@ -671,12 +707,12 @@ function PaymentsTab({
         )}
 
         {/* Setup status banner */}
-        {mpesaSettings.is_enabled && (() => {
+        {kcbSettings.is_enabled && (() => {
           const missing = [];
-          if (!mpesaSettings.consumer_key) missing.push('Consumer Key');
-          if (!mpesaSettings.consumer_secret) missing.push('Consumer Secret');
-          if (!mpesaSettings.passkey) missing.push('Passkey');
-          if (!mpesaSettings.short_code && !mpesaSettings.till_number) missing.push('Short Code or Till Number');
+          if (!kcbSettings.client_id) missing.push('Consumer Key');
+          if (!kcbSettings.client_secret) missing.push('Consumer Secret');
+          if (!kcbSettings.passkey) missing.push('Passkey');
+          if (!kcbSettings.org_shortcode && !kcbSettings.org_passkey) missing.push('Short Code or Till Number');
           if (missing.length > 0) {
             return (
               <div className="mb-4 flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
@@ -693,7 +729,7 @@ function PaymentsTab({
               <CheckCircle2 size={16} className="text-emerald-400" />
               <p className="text-emerald-300 text-sm">
                 All required fields configured
-                {mpesaSettings.environment === 'sandbox' && (
+                {kcbSettings.environment === 'sandbox' && (
                   <span className="ml-2 bg-blue-700 text-blue-100 text-[10px] px-2 py-0.5 rounded-full">SANDBOX</span>
                 )}
               </p>
@@ -701,164 +737,157 @@ function PaymentsTab({
           );
         })()}
 
-        {mpesaSettings.is_enabled && (
+        {kcbSettings.is_enabled && (
           <div className="space-y-4">
 
             {/* SECTION 1: Core credentials */}
             <div className="space-y-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                 <Shield size={15} className="text-emerald-400" />
-                API Credentials
-                <span className="text-[10px] text-red-400 font-normal ml-1">* required for all 4</span>
+                KCB API Credentials (BUNI)
+                <span className="text-[10px] text-red-400 font-normal ml-1">* required</span>
               </h3>
 
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">
-                  Consumer Key <span className="text-red-400">*</span>
+                  Client ID (App Key) <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
-                  value={mpesaSettings.consumer_key}
-                  onChange={(e) => onMpesaChange({ ...mpesaSettings, consumer_key: e.target.value })}
+                  value={kcbSettings.client_id}
+                  onChange={(e) => onMpesaChange({ ...kcbSettings, client_id: e.target.value })}
                   className={`w-full px-4 py-3 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
-                    !mpesaSettings.consumer_key ? 'border-amber-600' : 'border-slate-600'
+                    !kcbSettings.client_id ? 'border-amber-600' : 'border-slate-600'
                   }`}
-                  placeholder="Get from Safaricom Developer Portal"
+                  placeholder="Get from KCB Developer Portal - App Settings"
                 />
+                <p className="text-xs text-slate-500 mt-1">{"Login to KCB portal > Apps > View Details > App Key"}</p>
               </div>
 
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">
-                  Consumer Secret <span className="text-red-400">*</span>
+                  Client Secret (App Secret) <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type={showSecret ? 'text' : 'password'}
-                    value={mpesaSettings.consumer_secret}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, consumer_secret: e.target.value })}
+                    value={kcbSettings.client_secret}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, client_secret: e.target.value })}
                     className={`w-full px-4 py-3 pr-12 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
-                      !mpesaSettings.consumer_secret ? 'border-amber-600' : 'border-slate-600'
+                      !kcbSettings.client_secret ? 'border-amber-600' : 'border-slate-600'
                     }`}
-                    placeholder="Your consumer secret"
+                    placeholder="Get from KCB Developer Portal - App Settings"
                   />
                   <button type="button" onClick={onToggleSecret} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
                     {showSecret ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 mt-1">{"Login to KCB portal > Apps > View Details > App Secret"}</p>
               </div>
 
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">
-                  Passkey <span className="text-red-400">*</span>
+                  Pass Key <span className="text-red-400">*</span>
                 </label>
                 <input
                   type={showSecret ? 'text' : 'password'}
-                  value={mpesaSettings.passkey}
-                  onChange={(e) => onMpesaChange({ ...mpesaSettings, passkey: e.target.value })}
+                  value={kcbSettings.org_passkey || ''}
+                  onChange={(e) => onMpesaChange({ ...kcbSettings, org_passkey: e.target.value })}
                   className={`w-full px-4 py-3 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
-                    !mpesaSettings.passkey ? 'border-amber-600' : 'border-slate-600'
+                    !kcbSettings.org_passkey ? 'border-amber-600' : 'border-slate-600'
                   }`}
-                  placeholder="From Safaricom portal (Lipa na M-Pesa > Passkey)"
+                  placeholder="KCB Pass Key for BUNI (STK Push authentication)"
                 />
-                <p className="text-xs text-slate-500 mt-1">Found in Safaricom portal under Lipa na M-Pesa Online</p>
+                <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Settings > Security > BUNI Pass Key"}</p>
               </div>
             </div>
 
-            {/* SECTION 2: Short code / till */}
+            {/* SECTION 2: KCB Business Details */}
             <div className="space-y-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-white">Business Numbers</h3>
+              <h3 className="text-sm font-semibold text-white">KCB Business Configuration</h3>
               <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3">
                 <p className="text-xs text-blue-300">
-                  <strong>PayBill:</strong> Enter your Paybill number in Short Code, leave Till blank.<br />
-                  <strong>Buy Goods (Till):</strong> Enter your Till number, leave Short Code blank (or same).<br />
-                  If both are set, Till Number takes priority.
+                  <strong>Organization Shortcode:</strong> Your KCB organization identifier (e.g., JIMWAS, BUSINESS).<br />
+                  <strong>Merchant Code:</strong> Your KCB merchant/business code from the portal.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1.5">
-                    Short Code / Paybill <span className="text-slate-500 text-xs">(for PayBill)</span>
+                    Organization Shortcode <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
-                    value={mpesaSettings.short_code}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, short_code: e.target.value })}
+                    value={kcbSettings.org_shortcode}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, org_shortcode: e.target.value })}
                     className={`w-full px-4 py-3 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none ${
-                      !mpesaSettings.short_code && !mpesaSettings.till_number ? 'border-amber-600' : 'border-slate-600'
+                      !kcbSettings.org_shortcode ? 'border-amber-600' : 'border-slate-600'
                     }`}
-                    placeholder="e.g. 174379"
+                    placeholder="e.g. JIMWAS, MYSTORE"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1.5">
-                    Till Number <span className="text-slate-500 text-xs">(for Buy Goods)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={mpesaSettings.till_number || ''}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, till_number: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none"
-                    placeholder="e.g. 987654"
-                  />
+                    <p className="text-xs text-slate-500 mt-1">{"From KCB portal: Business Settings > Organization Code"}</p>
                 </div>
               </div>
             </div>
 
-            {/* SECTION 3: Other settings */}
+            {/* SECTION 3: Testing Environment */}
             <div className="space-y-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-white">Other Settings</h3>
+              <h3 className="text-sm font-semibold text-white">Testing & Deployment</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1.5">Environment</label>
+                  <label className="block text-sm text-slate-400 mb-1.5">Environment Mode</label>
                   <select
-                    value={mpesaSettings.environment}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, environment: e.target.value as 'sandbox' | 'production' })}
+                    value={kcbSettings.environment}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, environment: e.target.value as 'sandbox' | 'production' })}
                     className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none"
                   >
-                    <option value="sandbox">Sandbox (Testing)</option>
-                    <option value="production">Production (Live)</option>
+                    <option value="sandbox">Sandbox (KCB Testing - No Real Money)</option>
+                    <option value="production">Production (Live - Real Transactions)</option>
                   </select>
+                  <p className="text-xs text-slate-500 mt-1">Always use Sandbox for testing. Switch to Production only after KCB approval.</p>
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-1.5">Default Country Code</label>
                   <input
                     type="text"
-                    value={mpesaSettings.default_phone_country_code}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, default_phone_country_code: e.target.value })}
+                    value={kcbSettings.default_phone_country_code}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, default_phone_country_code: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none"
                     placeholder="254"
                   />
+                  <p className="text-xs text-slate-500 mt-1">Kenya country code: 254</p>
                 </div>
               </div>
             </div>
 
-            {/* SECTION 4: Callback URLs */}
+            {/* SECTION 4: KCB IPN Callback URLs */}
             <div className="space-y-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <h3 className="text-sm font-semibold text-white">Callback URLs</h3>
+              <h3 className="text-sm font-semibold text-white">KCB IPN (Instant Payment Notification) URLs</h3>
               <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 text-xs text-blue-300">
-                Leave blank to use auto-generated Supabase URLs (recommended):
+                Configure these in KCB portal for payment status callbacks:
                 <div className="mt-2 font-mono text-blue-400/80 break-all space-y-1">
-                  <div><span className="text-emerald-400">Callback:</span> {import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-callback</div>
-                  <div><span className="text-amber-400">Timeout:</span> {import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-timeout</div>
+                  <div><span className="text-emerald-400">IPN Endpoint:</span> {import.meta.env.VITE_SUPABASE_URL}/functions/v1/kcb-ipn</div>
+                  <div><span className="text-slate-500 text-[11px]">KCB will POST payment status here after STK Push</span></div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1.5">Custom Callback URL</label>
+                  <label className="block text-sm text-slate-400 mb-1.5">Custom IPN Callback URL</label>
                   <input
                     type="url"
-                    value={mpesaSettings.callback_url || ''}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, callback_url: e.target.value })}
+                    value={kcbSettings.callback_url || ''}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, callback_url: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none text-sm"
-                    placeholder="Leave empty to use Supabase default"
+                    placeholder="Leave empty to use Supabase default IPN handler"
                   />
+                  <p className="text-xs text-slate-500 mt-1">Leave blank to use auto-generated Supabase IPN URL (recommended)</p>
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-1.5">Custom Timeout URL</label>
                   <input
                     type="url"
-                    value={mpesaSettings.timeout_url || ''}
-                    onChange={(e) => onMpesaChange({ ...mpesaSettings, timeout_url: e.target.value })}
+                    value={kcbSettings.timeout_url || ''}
+                    onChange={(e) => onMpesaChange({ ...kcbSettings, timeout_url: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none text-sm"
                     placeholder="Leave empty to use Supabase default"
                   />
@@ -867,7 +896,7 @@ function PaymentsTab({
             </div>
 
             {/* Go Live checklist */}
-            {mpesaSettings.environment === 'production' && (
+            {kcbSettings.environment === 'production' && (
               <div className="bg-emerald-900/20 border border-emerald-700 rounded-xl p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
                   <CheckCircle2 size={15} />
@@ -875,10 +904,10 @@ function PaymentsTab({
                 </h3>
                 <ul className="space-y-2 text-xs text-emerald-400/80">
                   {[
-                    { done: !!mpesaSettings.consumer_key, text: 'Production Consumer Key set' },
-                    { done: !!mpesaSettings.consumer_secret, text: 'Production Consumer Secret set' },
-                    { done: !!mpesaSettings.passkey, text: 'Production Passkey set (from Safaricom portal)' },
-                    { done: !!(mpesaSettings.short_code || mpesaSettings.till_number), text: 'Real Paybill or Till Number set' },
+                    { done: !!kcbSettings.client_id, text: 'Production Consumer Key set' },
+                    { done: !!kcbSettings.client_secret, text: 'Production Consumer Secret set' },
+                    { done: !!kcbSettings.passkey, text: 'Production Passkey set (from Safaricom portal)' },
+                    { done: !!(kcbSettings.org_shortcode || kcbSettings.org_passkey), text: 'Real Paybill or Till Number set' },
                     { done: true, text: 'Callback URL uses HTTPS (Supabase Edge Functions are HTTPS by default)' },
                     { done: true, text: 'Go Live approved on Daraja portal' },
                   ].map((item, i) => (
@@ -897,10 +926,17 @@ function PaymentsTab({
             {/* Save Button with Status */}
             <div className="pt-4 border-t border-slate-600">
               <div className="flex items-center justify-between">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
+                  {/* Auto-save Status */}
+                  {autoSaving && (
+                    <div className="flex items-center gap-1 text-xs text-blue-400">
+                      <Loader2 size={12} className="animate-spin" />
+                      Auto-saving...
+                    </div>
+                  )}
                   {/* Sync Status */}
                   <div className="flex items-center gap-2">
-                    {mpesaSettings.sync_status === 'synced' ? (
+                    {kcbSettings.sync_status === 'synced' ? (
                       <span className="flex items-center gap-1 text-xs text-emerald-400">
                         <CheckCircle2 size={14} />
                         Synced to cloud
@@ -913,11 +949,11 @@ function PaymentsTab({
                     )}
                   </div>
                   {/* Last Updated */}
-                  {mpesaSettings.last_updated && (
+                  {kcbSettings.last_updated && (
                     <div className="flex items-center gap-1 text-xs text-slate-400">
                       <Clock size={12} />
                       <span>
-                        Last saved: {new Date(mpesaSettings.last_updated).toLocaleString()}
+                        Last saved: {new Date(kcbSettings.last_updated).toLocaleString()}
                       </span>
                     </div>
                   )}

@@ -14,11 +14,12 @@ import type {
 } from './security-types';
 import type {
   BusinessSettings,
-  MpesaSettings,
+  KCBSettings,
   PaymentMethodConfig,
   LoyaltySettings,
   ReceiptSettings,
 } from './settings-types';
+import type { CartItem } from './types';
 
 interface POSDatabase extends DBSchema {
   customers: {
@@ -278,11 +279,11 @@ interface POSDatabase extends DBSchema {
     key: string;
     value: BusinessSettings;
   };
-  mpesa_settings: {
+  kcb_settings: {
     key: string;
-    value: MpesaSettings;
+    value: KCBSettings;
   };
-  mpesa_payments: {
+  kcb_payments: {
     key: string;
     value: {
       id: string;
@@ -349,6 +350,44 @@ interface POSDatabase extends DBSchema {
       description?: string;
       is_active: boolean;
       created_at: string;
+    };
+  };
+  cart_sessions: {
+    key: string;
+    value: {
+      id: string;
+      items: CartItem[];
+      selectedCustomer: any | null;
+      total: number;
+      saleType: string;
+      depositAmount: number;
+      created_at: string;
+      updated_at: string;
+    };
+  };
+  parked_sales: {
+    key: string;
+    value: {
+      id: string;
+      cart: CartItem[];
+      selectedCustomer: any | null;
+      total: number;
+      saleType: string;
+      depositAmount: number;
+      notes?: string;
+      created_at: string;
+      updated_at: string;
+    };
+  };
+  restore_points: {
+    key: string;
+    value: {
+      id: string;
+      backup_date: string;
+      created_at: string;
+      product_count: number;
+      customer_count: number;
+      transaction_count: number;
     };
   };
 }
@@ -537,17 +576,18 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
         db.createObjectStore('business_settings', { keyPath: 'id' });
       }
 
-      if (!db.objectStoreNames.contains('mpesa_settings')) {
-        db.createObjectStore('mpesa_settings', { keyPath: 'id' });
+      // KCB settings store (replaces mpesa_settings)
+      if (!db.objectStoreNames.contains('kcb_settings')) {
+        db.createObjectStore('kcb_settings', { keyPath: 'id' });
       }
 
-      // M-Pesa payments store
-      if (!db.objectStoreNames.contains('mpesa_payments')) {
-        const mpesaPaymentStore = db.createObjectStore('mpesa_payments', { keyPath: 'id' });
-        mpesaPaymentStore.createIndex('by-transaction', 'transaction_id');
-        mpesaPaymentStore.createIndex('by-phone', 'phone');
-        mpesaPaymentStore.createIndex('by-status', 'status');
-        mpesaPaymentStore.createIndex('by-created-at', 'created_at');
+      // KCB payments store (replaces mpesa_payments)
+      if (!db.objectStoreNames.contains('kcb_payments')) {
+        const kcbPaymentStore = db.createObjectStore('kcb_payments', { keyPath: 'id' });
+        kcbPaymentStore.createIndex('by-transaction', 'transaction_id');
+        kcbPaymentStore.createIndex('by-phone', 'phone');
+        kcbPaymentStore.createIndex('by-status', 'status');
+        kcbPaymentStore.createIndex('by-created-at', 'created_at');
       }
 
       if (!db.objectStoreNames.contains('payment_methods')) {
@@ -573,6 +613,21 @@ export async function getDB(): Promise<IDBPDatabase<POSDatabase>> {
       // Expense categories store
       if (!db.objectStoreNames.contains('expense_categories')) {
         db.createObjectStore('expense_categories', { keyPath: 'id' });
+      }
+
+      // Cart session store (for persisting current cart)
+      if (!db.objectStoreNames.contains('cart_sessions')) {
+        db.createObjectStore('cart_sessions', { keyPath: 'id' });
+      }
+
+      // Parked sales store (for saving incomplete transactions)
+      if (!db.objectStoreNames.contains('parked_sales')) {
+        db.createObjectStore('parked_sales', { keyPath: 'id' });
+      }
+
+      // Restore points store (for persisting last successful backup import)
+      if (!db.objectStoreNames.contains('restore_points')) {
+        db.createObjectStore('restore_points', { keyPath: 'id' });
       }
     },
   });
@@ -1107,49 +1162,86 @@ export async function getBusinessSettings(): Promise<BusinessSettings | undefine
   return db.get('business_settings', 'business-settings');
 }
 
-// Mpesa settings operations
-export async function saveMpesaSettings(settings: MpesaSettings): Promise<MpesaSettings> {
-  const db = await getDB();
-  // Write to IDB optimistically
-  await db.put('mpesa_settings', settings);
+// KCB settings operations
+export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSettings> {
+  try {
+    const db = await getDB();
+    
+    // Ensure the settings object has required fields
+    const safeSettings: KCBSettings = {
+      ...settings,
+      id: settings.id || 'kcb-settings',
+      sync_status: 'pending' as const,
+    };
 
-  // Direct upsert to Supabase — do not go through sync queue for settings
-  const { getSupabase } = await import('./sync');
-  const supabase = getSupabase();
-  if (supabase) {
-    const { error } = await supabase.from('mpesa_settings').upsert({
-      id: settings.id,
-      is_enabled: settings.is_enabled,
-      environment: settings.environment,
-      consumer_key: settings.consumer_key || null,
-      consumer_secret: settings.consumer_secret || null,
-      passkey: settings.passkey || null,
-      short_code: settings.short_code || null,
-      till_number: settings.till_number || null,
-      callback_url: settings.callback_url || null,
-      timeout_url: settings.timeout_url || null,
-      result_url: settings.result_url || null,
-      default_phone_country_code: settings.default_phone_country_code,
-      last_updated: settings.last_updated,
-      last_updated_by: settings.last_updated_by || null,
-      created_at: settings.created_at,
-      updated_at: settings.updated_at,
-    });
-    if (error) throw new Error(error.message);
+    try {
+      // Write to IDB optimistically
+      await db.put('kcb_settings', safeSettings);
+    } catch (idbError) {
+      console.warn('[v0] IndexedDB write warning for KCB settings:', idbError instanceof Error ? idbError.message : String(idbError));
+      // Continue to try Supabase sync even if IDB fails
+    }
+
+    // Direct upsert to Supabase — do not go through sync queue for settings
+    const { getSupabase } = await import('./sync');
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('kcb_settings').upsert({
+          id: safeSettings.id,
+          is_enabled: safeSettings.is_enabled,
+          environment: safeSettings.environment,
+          client_id: safeSettings.client_id || null,
+          client_secret: safeSettings.client_secret || null,
+          org_shortcode: safeSettings.org_shortcode || null,
+          org_passkey: safeSettings.org_passkey || null,
+          callback_url: safeSettings.callback_url || null,
+          public_cert_path: safeSettings.public_cert_path || null,
+          default_phone_country_code: safeSettings.default_phone_country_code,
+          last_updated: safeSettings.last_updated,
+          last_updated_by: safeSettings.last_updated_by || null,
+          created_at: safeSettings.created_at,
+          updated_at: safeSettings.updated_at,
+        });
+        if (error) console.warn('[v0] Supabase sync warning for KCB settings:', error.message);
+      } catch (supabaseError) {
+        console.warn('[v0] Supabase sync error (non-critical):', supabaseError instanceof Error ? supabaseError.message : String(supabaseError));
+      }
+    }
+
+    try {
+      const synced = { ...safeSettings, sync_status: 'synced' as const };
+      await db.put('kcb_settings', synced);
+      return synced;
+    } catch (finalIdbError) {
+      console.warn('[v0] Final IndexedDB write failed, returning unsaved settings');
+      return safeSettings;
+    }
+  } catch (error) {
+    console.error('[v0] Critical error in saveKCBSettings:', error);
+    throw error;
   }
-
-  const synced = { ...settings, sync_status: 'synced' as const };
-  await db.put('mpesa_settings', synced);
-  return synced;
 }
 
-export async function getMpesaSettings(): Promise<MpesaSettings | undefined> {
-  const db = await getDB();
-  return db.get('mpesa_settings', 'mpesa-settings');
+export async function getKCBSettings(): Promise<KCBSettings | undefined> {
+  try {
+    const db = await getDB();
+    try {
+      const settings = await db.get('kcb_settings', 'kcb-settings');
+      return settings;
+    } catch (storeError) {
+      // Store might not exist yet, return undefined instead of erroring
+      console.debug('[v0] KCB settings store not yet initialized');
+      return undefined;
+    }
+  } catch (error) {
+    console.error('[v0] Failed to get KCB settings:', error);
+    return undefined;
+  }
 }
 
-// M-Pesa Payment operations
-export interface MpesaPaymentRecord {
+// KCB Payment operations
+export interface KCBPaymentRecord {
   id: string;
   transaction_id?: string;
   phone: string;
@@ -1168,13 +1260,13 @@ export interface MpesaPaymentRecord {
   sync_status: 'pending' | 'synced';
 }
 
-export async function saveMpesaPayment(payment: MpesaPaymentRecord) {
+export async function saveKCBPayment(payment: KCBPaymentRecord) {
   const db = await getDB();
-  await db.put('mpesa_payments', payment);
+  await db.put('kcb_payments', payment);
   const { getSupabase } = await import('./sync');
   const supabase = getSupabase();
   if (supabase) {
-    const { error } = await supabase.from('mpesa_payments').upsert({
+    const { error } = await supabase.from('kcb_payments').upsert({
       id: payment.id,
       transaction_id: payment.transaction_id,
       phone: payment.phone,
@@ -1195,41 +1287,41 @@ export async function saveMpesaPayment(payment: MpesaPaymentRecord) {
   }
 }
 
-export async function getMpesaPayment(id: string): Promise<MpesaPaymentRecord | undefined> {
+export async function getKCBPayment(id: string): Promise<KCBPaymentRecord | undefined> {
   const db = await getDB();
-  return db.get('mpesa_payments', id);
+  return db.get('kcb_payments', id);
 }
 
-export async function getAllMpesaPayments(): Promise<MpesaPaymentRecord[]> {
+export async function getAllKCBPayments(): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAll('mpesa_payments');
+  return db.getAll('kcb_payments');
 }
 
-export async function getMpesaPaymentsByStatus(status: string): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsByStatus(status: string): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAllFromIndex('mpesa_payments', 'by-status', status);
+  return db.getAllFromIndex('kcb_payments', 'by-status', status);
 }
 
-export async function getMpesaPaymentsByPhone(phone: string): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsByPhone(phone: string): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  return db.getAllFromIndex('mpesa_payments', 'by-phone', phone);
+  return db.getAllFromIndex('kcb_payments', 'by-phone', phone);
 }
 
-export async function getMpesaPaymentsByTransaction(transactionId: string): Promise<MpesaPaymentRecord | undefined> {
+export async function getKCBPaymentsByTransaction(transactionId: string): Promise<KCBPaymentRecord | undefined> {
   const db = await getDB();
-  const allPayments = await db.getAllFromIndex('mpesa_payments', 'by-transaction', transactionId);
+  const allPayments = await db.getAllFromIndex('kcb_payments', 'by-transaction', transactionId);
   return allPayments[0];
 }
 
-export async function getMpesaPaymentsSinceDate(date: Date): Promise<MpesaPaymentRecord[]> {
+export async function getKCBPaymentsSinceDate(date: Date): Promise<KCBPaymentRecord[]> {
   const db = await getDB();
-  const allPayments = await db.getAll('mpesa_payments');
+  const allPayments = await db.getAll('kcb_payments');
   return allPayments.filter(p => new Date(p.created_at) >= date);
 }
 
-export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentRecord['status'], updates?: Partial<MpesaPaymentRecord>) {
+export async function updateKCBPaymentStatus(id: string, status: KCBPaymentRecord['status'], updates?: Partial<KCBPaymentRecord>) {
   const db = await getDB();
-  const payment = await db.get('mpesa_payments', id);
+  const payment = await db.get('kcb_payments', id);
   if (!payment) throw new Error('M-Pesa payment not found');
   
   const updated = {
@@ -1238,12 +1330,12 @@ export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentR
     status,
     last_attempt_at: new Date().toISOString(),
   };
-  await db.put('mpesa_payments', updated);
+  await db.put('kcb_payments', updated);
   
   const { getSupabase } = await import('./sync');
   const supabase = getSupabase();
   if (supabase) {
-    const { error } = await supabase.from('mpesa_payments').update({
+    const { error } = await supabase.from('kcb_payments').update({
       status: updated.status,
       result_desc: updated.result_desc,
       error_message: updated.error_message,
@@ -1257,17 +1349,17 @@ export async function updateMpesaPaymentStatus(id: string, status: MpesaPaymentR
 }
 
 // M-Pesa Statistics
-export interface MpesaStatistics {
+export interface KCBStatistics {
   totalTransactions: number;
   totalRevenue: number;
   successfulTransactions: number;
   failedTransactions: number;
   successRate: number;
-  recentTransactions: MpesaPaymentRecord[];
+  recentTransactions: KCBPaymentRecord[];
 }
 
-export async function getMpesaStatistics(sinceDate?: Date): Promise<MpesaStatistics> {
-  const payments = sinceDate ? await getMpesaPaymentsSinceDate(sinceDate) : await getAllMpesaPayments();
+export async function getKCBStatistics(sinceDate?: Date): Promise<KCBStatistics> {
+  const payments = sinceDate ? await getKCBPaymentsSinceDate(sinceDate) : await getAllKCBPayments();
   
   const totalTransactions = payments.length;
   const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -1543,4 +1635,157 @@ export async function getExpenseCategory(id: string): Promise<ExpenseCategoryRec
 export async function getAllExpenseCategories(): Promise<ExpenseCategoryRecord[]> {
   const db = await getDB();
   return db.getAll('expense_categories');
+}
+
+// ============ CART SESSION PERSISTENCE ============
+
+export interface CartSession {
+  id: string;
+  items: CartItem[];
+  selectedCustomer: any | null;
+  total: number;
+  saleType: string;
+  depositAmount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function saveCartSession(session: CartSession): Promise<void> {
+  try {
+    const db = await getDB();
+    session.updated_at = new Date().toISOString();
+    // Use 'current' as the key to always have one active session
+    await db.put('cart_sessions', session, 'current');
+  } catch (error) {
+    console.error('[v0] Failed to save cart session:', error);
+  }
+}
+
+export async function loadCartSession(): Promise<CartSession | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('cart_sessions', 'current');
+  } catch (error) {
+    console.error('[v0] Failed to load cart session:', error);
+    return undefined;
+  }
+}
+
+export async function clearCartSession(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('cart_sessions', 'current');
+  } catch (error) {
+    console.error('[v0] Failed to clear cart session:', error);
+  }
+}
+
+// ============ PARKED SALES PERSISTENCE ============
+
+export interface ParkedSale {
+  id: string;
+  cart: CartItem[];
+  selectedCustomer: any | null;
+  total: number;
+  saleType: string;
+  depositAmount: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function saveParkedSale(sale: ParkedSale): Promise<void> {
+  try {
+    const db = await getDB();
+    sale.updated_at = new Date().toISOString();
+    await db.put('parked_sales', sale, sale.id);
+  } catch (error) {
+    console.error('[v0] Failed to save parked sale:', error);
+  }
+}
+
+export async function getParkedSale(id: string): Promise<ParkedSale | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('parked_sales', id);
+  } catch (error) {
+    console.error('[v0] Failed to load parked sale:', error);
+    return undefined;
+  }
+}
+
+export async function getAllParkedSales(): Promise<ParkedSale[]> {
+  try {
+    const db = await getDB();
+    return await db.getAll('parked_sales');
+  } catch (error) {
+    console.error('[v0] Failed to load parked sales:', error);
+    return [];
+  }
+}
+
+export async function deleteParkedSale(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('parked_sales', id);
+  } catch (error) {
+    console.error('[v0] Failed to delete parked sale:', error);
+  }
+}
+
+export async function clearAllParkedSales(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.clear('parked_sales');
+  } catch (error) {
+    console.error('[v0] Failed to clear parked sales:', error);
+  }
+}
+
+// ============ RESTORE POINT PERSISTENCE ============
+
+export interface RestorePoint {
+  id: string;
+  backup_date: string;
+  created_at: string;
+  product_count: number;
+  customer_count: number;
+  transaction_count: number;
+}
+
+export async function saveRestorePoint(backupDate: string, productCount: number, customerCount: number, transactionCount: number): Promise<void> {
+  try {
+    const db = await getDB();
+    const restorePoint: RestorePoint = {
+      id: 'last-restore-point',
+      backup_date: backupDate,
+      created_at: new Date().toISOString(),
+      product_count: productCount,
+      customer_count: customerCount,
+      transaction_count: transactionCount,
+    };
+    await db.put('restore_points', restorePoint, restorePoint.id);
+    console.log('[v0] Saved restore point:', restorePoint);
+  } catch (error) {
+    console.error('[v0] Failed to save restore point:', error);
+  }
+}
+
+export async function getLastRestorePoint(): Promise<RestorePoint | undefined> {
+  try {
+    const db = await getDB();
+    return await db.get('restore_points', 'last-restore-point');
+  } catch (error) {
+    console.error('[v0] Failed to load restore point:', error);
+    return undefined;
+  }
+}
+
+export async function clearRestorePoint(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('restore_points', 'last-restore-point');
+  } catch (error) {
+    console.error('[v0] Failed to clear restore point:', error);
+  }
 }

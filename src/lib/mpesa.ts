@@ -1,6 +1,6 @@
 // M-Pesa STK Push Integration
 import { generateId } from './db';
-import type { MpesaPaymentRecord } from './db';
+import type { KCBPaymentRecord } from './db';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -48,10 +48,21 @@ export async function initiateSTKPush(
       }),
     });
 
-    const data = await response.json();
+    // Safely parse JSON response
+    let data;
+    try {
+      const text = await response.text();
+      if (!text) {
+        return { success: false, error: 'Empty response from M-Pesa service' };
+      }
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[v0] JSON parse error in initiateSTKPush:', parseError);
+      return { success: false, error: 'Invalid response from M-Pesa service' };
+    }
 
     if (!response.ok) {
-      return { success: false, error: data.error || 'Failed to initiate payment' };
+      return { success: false, error: data?.error || 'Failed to initiate payment' };
     }
 
     return {
@@ -77,10 +88,21 @@ export async function checkSTKPushStatus(checkoutRequestId: string): Promise<STK
       body: JSON.stringify({ checkoutRequestId }),
     });
 
-    const data = await response.json();
+    // Safely parse JSON response
+    let data;
+    try {
+      const text = await response.text();
+      if (!text) {
+        return { success: false, status: 'failed', error: 'Empty response from M-Pesa service' };
+      }
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[v0] JSON parse error in checkSTKPushStatus:', parseError);
+      return { success: false, status: 'failed', error: 'Invalid response from M-Pesa service' };
+    }
 
     if (!response.ok) {
-      return { success: false, status: 'failed', error: data.error || 'Failed to check status' };
+      return { success: false, status: 'failed', error: data?.error || 'Failed to check status' };
     }
 
     return {
@@ -144,7 +166,7 @@ export function formatPhoneDisplay(phone: string): string {
 }
 
 // Create and track M-Pesa payment record
-export async function createMpesaPaymentRecord(
+export async function createKCBPaymentRecord(
   phone: string,
   amount: number,
   options?: {
@@ -153,10 +175,10 @@ export async function createMpesaPaymentRecord(
     checkoutRequestId?: string;
     merchantRequestId?: string;
   }
-): Promise<MpesaPaymentRecord> {
+): Promise<KCBPaymentRecord> {
   const { saveMpesaPayment } = await import('./db');
   
-  const payment: MpesaPaymentRecord = {
+  const payment: KCBPaymentRecord = {
     id: `mpesa_${generateId()}`,
     phone,
     amount,

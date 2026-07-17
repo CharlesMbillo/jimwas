@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Minus, Trash2, Search, User, ShoppingCart, Banknote, CreditCard, Smartphone, X, Package, Archive, ArchiveRestore, Loader2, CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Zap } from 'lucide-react';
-import { generateId, saveProduct, getAllProducts, getAllCustomers, saveCustomer, getMpesaSettings } from '../lib/db';
+import { generateId, saveProduct, getAllProducts, getAllCustomers, saveCustomer, getKCBSettings } from '../lib/db';
 import { syncInsertCustomer, syncInsertProduct, getSupabase } from '../lib/sync';
 import { logSaleCompleted, logCustomerCreated } from '../lib/audit';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +22,7 @@ export function POSTerminal() {
   const [searchTerm, setSearchTerm] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mpesa'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'kcb'>('cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
@@ -33,17 +33,17 @@ export function POSTerminal() {
   const [showParkedSales, setShowParkedSales] = useState(false);
 
   // M-Pesa STK Push state
-  const [mpesaPhone, setMpesaPhone] = useState('');
-  const [mpesaStatus, setMpesaStatus] = useState<'idle' | 'initiating' | 'waiting' | 'checking' | 'success' | 'failed' | 'cancelled'>('idle');
-  const [mpesaCheckoutId, setMpesaCheckoutId] = useState<string | null>(null);
-  const [mpesaError, setMpesaError] = useState<string | null>(null);
-  const [mpesaReceiptNumber, setMpesaReceiptNumber] = useState<string | null>(null);
-  const [mpesaStartTime, setMpesaStartTime] = useState<Date | null>(null);
+  const [kcbPhone, setKCBPhone] = useState('');
+  const [kcbStatus, setKCBStatus] = useState<'idle' | 'initiating' | 'waiting' | 'checking' | 'success' | 'failed' | 'cancelled'>('idle');
+  const [kcbCheckoutId, setKCBCheckoutId] = useState<string | null>(null);
+  const [kcbError, setKCBError] = useState<string | null>(null);
+  const [kcbReceiptNumber, setKCBReceiptNumber] = useState<string | null>(null);
+  const [kcbStartTime, setKCBStartTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [mpesaEnabled, setMpesaEnabled] = useState<boolean | null>(null);
-  const [mpesaConfigured, setMpesaConfigured] = useState<boolean>(false);
-  const [mpesaEnvironment, setMpesaEnvironment] = useState<'sandbox' | 'production'>('sandbox');
-  const [mpesaSimulating, setMpesaSimulating] = useState(false);
+  const [kcbEnabled, setKCBEnabled] = useState<boolean | null>(null);
+  const [kcbConfigured, setKCBConfigured] = useState<boolean>(false);
+  const [kcbEnvironment, setKCBEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [kcbSimulating, setKCBSimulating] = useState(false);
   
   // Sale type state
   const [saleType, setSaleType] = useState<'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama'>('standard');
@@ -51,52 +51,112 @@ export function POSTerminal() {
 
   useEffect(() => {
     loadData();
+    // Load cart from storage on mount
+    loadSavedCart();
+    // Load parked sales on mount
+    loadSavedParkedSales();
   }, []);
+
+  // Auto-save cart to IndexedDB whenever it changes (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (cart.length > 0) {
+        saveCartToStorage();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [cart, selectedCustomer, saleType, depositAmount]);
 
   // Timer for M-Pesa in-progress states only — do NOT reset on failure/success so the final time remains visible
   useEffect(() => {
-    if (mpesaStatus !== 'waiting' && mpesaStatus !== 'initiating' && mpesaStatus !== 'checking') {
+    if (kcbStatus !== 'waiting' && kcbStatus !== 'initiating' && kcbStatus !== 'checking') {
       return;
     }
 
     const interval = setInterval(() => {
-      if (mpesaStartTime) {
-        setElapsedSeconds(Math.floor((Date.now() - mpesaStartTime.getTime()) / 1000));
+      if (kcbStartTime) {
+        setElapsedSeconds(Math.floor((Date.now() - kcbStartTime.getTime()) / 1000));
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [mpesaStatus, mpesaStartTime]);
+  }, [kcbStatus, kcbStartTime]);
 
   const loadData = async () => {
     const [prods, custs, idbMpesa] = await Promise.all([
       getAllProducts(),
       getAllCustomers(),
-      getMpesaSettings(),
+      getKCBSettings(),
     ]);
     setProducts(prods.filter(p => p.is_active));
     setCustomers(custs);
 
-    // Always try Supabase first for M-Pesa settings (authoritative source)
+    // Always try Supabase first for KCB settings (authoritative source)
     let mpesa = idbMpesa;
     const supabase = getSupabase();
     if (supabase) {
       const { data } = await supabase
-        .from('mpesa_settings')
+        .from('kcb_settings')
         .select('*')
         .eq('id', 'mpesa-settings')
         .maybeSingle();
       if (data) mpesa = data;
     }
 
-    setMpesaEnabled(mpesa?.is_enabled ?? false);
-    setMpesaEnvironment(mpesa?.environment ?? 'sandbox');
+    setKCBEnabled(mpesa?.is_enabled ?? false);
+    setKCBEnvironment(mpesa?.environment ?? 'sandbox');
     // M-Pesa is "configured" when enabled + has consumer key + secret (minimum to attempt)
     // passkey and short_code are validated at the edge function level with clear errors
     const hasCredentials = !!(mpesa?.is_enabled &&
       mpesa.consumer_key &&
       mpesa.consumer_secret);
-    setMpesaConfigured(hasCredentials);
+    setKCBConfigured(hasCredentials);
+  };
+
+  const saveCartToStorage = async () => {
+    try {
+      const { saveCartSession } = await import('../lib/db');
+      await saveCartSession({
+        id: 'current-cart',
+        items: cart,
+        selectedCustomer,
+        total: cartTotal,
+        saleType,
+        depositAmount,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('[v0] Failed to save cart:', error);
+    }
+  };
+
+  const loadSavedCart = async () => {
+    try {
+      const { loadCartSession } = await import('../lib/db');
+      const savedCart = await loadCartSession();
+      if (savedCart && savedCart.items.length > 0) {
+        setCart(savedCart.items);
+        setSelectedCustomer(savedCart.selectedCustomer);
+        setSaleType(savedCart.saleType || 'standard');
+        setDepositAmount(savedCart.depositAmount || 0);
+      }
+    } catch (error) {
+      console.error('[v0] Failed to load cart:', error);
+    }
+  };
+
+  const loadSavedParkedSales = async () => {
+    try {
+      const { getAllParkedSales } = await import('../lib/db');
+      const parked = await getAllParkedSales();
+      if (parked.length > 0) {
+        console.log(`[v0] Loaded ${parked.length} parked sales`);
+        // You can display these in a UI list if needed
+      }
+    } catch (error) {
+      console.error('[v0] Failed to load parked sales:', error);
+    }
   };
 
   // Debounce search terms for better performance
@@ -175,54 +235,54 @@ export function POSTerminal() {
     setAmountPaid('');
     setShowCheckout(false);
     // Reset M-Pesa state
-    setMpesaPhone('');
-    setMpesaStatus('idle');
-    setMpesaCheckoutId(null);
-    setMpesaError(null);
-    setMpesaReceiptNumber(null);
-    setMpesaStartTime(null);
+    setKCBPhone('');
+    setKCBStatus('idle');
+    setKCBCheckoutId(null);
+    setKCBError(null);
+    setKCBReceiptNumber(null);
+    setKCBStartTime(null);
     setElapsedSeconds(0);
     // Reset sale type
     setSaleType('standard');
     setDepositAmount(0);
   };
 
-  // Handle M-Pesa STK Push
+  // Handle KCB BUNI STK Push
   const handleMpesaPayment = async () => {
-    if (!mpesaConfigured) {
-      setMpesaStatus('failed');
-      setMpesaError(mpesaEnabled
-        ? 'M-Pesa API credentials not configured. Go to Settings > Payments to add Consumer Key, Secret, Passkey, and Short Code.'
-        : 'M-Pesa is not enabled. Go to Settings > Payments to enable it.');
+    if (!kcbConfigured) {
+      setKCBStatus('failed');
+      setKCBError(kcbEnabled
+        ? 'KCB BUNI API credentials not configured. Go to Settings > Payments to add Client ID, Secret, and Pass Key.'
+        : 'KCB BUNI is not enabled. Go to Settings > Payments to enable it.');
       return;
     }
 
-    if (!mpesaPhone || mpesaPhone.length < 9) {
-      setMpesaError('Please enter a valid phone number');
+    if (!kcbPhone || kcbPhone.length < 9) {
+      setKCBError('Please enter a valid phone number');
       return;
     }
 
-    setMpesaStatus('initiating');
-    setMpesaError(null);
-    setMpesaStartTime(new Date());
+    setKCBStatus('initiating');
+    setKCBError(null);
+    setKCBStartTime(new Date());
 
     try {
-      const result = await initiateSTKPush(mpesaPhone, cartTotal, {
+      const result = await initiateSTKPush(kcbPhone, cartTotal, {
         cashierId: user?.id,
         cashierName: user?.name,
         accountReference: `POS-${Date.now()}`,
-        transactionDesc: 'POS Purchase',
+        transactionDesc: 'KCB BUNI POS Payment',
       });
 
       if (!result.success || !result.checkoutRequestId) {
-        setMpesaStatus('failed');
-        setMpesaError(result.error || 'Failed to initiate payment');
+        setKCBStatus('failed');
+        setKCBError(result.error || 'Failed to initiate KCB payment');
         return;
       }
 
-      setMpesaCheckoutId(result.checkoutRequestId);
-      setMpesaStatus('waiting');
-      toast.show('Payment request sent. Check your phone for M-Pesa prompt.');
+      setKCBCheckoutId(result.checkoutRequestId);
+      setKCBStatus('waiting');
+      toast.show('KCB payment request sent. Check your phone for STK Push prompt.');
 
       // Start polling for completion
       const statusResult = await pollForPaymentCompletion(result.checkoutRequestId, {
@@ -230,67 +290,82 @@ export function POSTerminal() {
         intervalMs: 5000,
         onStatusChange: (status) => {
           if (status.status === 'processing') {
-            setMpesaStatus('checking');
+            setKCBStatus('checking');
           }
         },
       });
 
       if (statusResult.status === 'success') {
-        setMpesaStatus('success');
-        setMpesaReceiptNumber(statusResult.mpesaReceiptNumber || null);
-        toast.show('Payment successful!');
+        setKCBStatus('success');
+        setKCBReceiptNumber(statusResult.kcbReceiptNumber || null);
+        toast.show('KCB payment successful!');
         // Auto-complete the sale
-        await completeMpesaSale(statusResult.mpesaReceiptNumber);
+        await completeMpesaSale(statusResult.kcbReceiptNumber);
       } else if (statusResult.status === 'cancelled') {
-        setMpesaStatus('cancelled');
-        setMpesaError('Payment was cancelled by user');
+        setKCBStatus('cancelled');
+        setKCBError('Payment was cancelled by user');
       } else if (statusResult.status === 'timeout') {
-        setMpesaStatus('failed');
-        setMpesaError('Payment timed out. Please try again.');
+        setKCBStatus('failed');
+        setKCBError('KCB payment timed out. Please try again.');
       } else if (statusResult.status === 'insufficient_balance') {
-        setMpesaStatus('failed');
-        setMpesaError('Insufficient M-Pesa balance');
+        setKCBStatus('failed');
+        setKCBError('Insufficient M-Pesa balance on account');
       } else {
-        setMpesaStatus('failed');
-        setMpesaError(statusResult.resultDesc || 'Payment failed');
+        setKCBStatus('failed');
+        setKCBError(statusResult.resultDesc || 'KCB payment failed');
       }
     } catch (error) {
-      setMpesaStatus('failed');
-      setMpesaError(error instanceof Error ? error.message : 'An error occurred');
+      setKCBStatus('failed');
+      setKCBError(error instanceof Error ? error.message : 'KCB payment error occurred');
     }
   };
 
-  // Sandbox only: simulate a payment via Daraja simulate endpoint
+  // Sandbox only: simulate a KCB BUNI payment for testing
   const handleSimulatePayment = async () => {
-    if (mpesaEnvironment !== 'sandbox') return;
-    setMpesaSimulating(true);
+    if (kcbEnvironment !== 'sandbox') return;
+    setKCBSimulating(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mpesa-simulate`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kcb-simulate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          checkoutRequestId: mpesaCheckoutId || `sim-${Date.now()}`,
-          phone: mpesaPhone,
+          checkoutRequestId: kcbCheckoutId || `sim-${Date.now()}`,
+          phone: kcbPhone,
           amount: cart.reduce((s, i) => s + i.product.selling_price * i.quantity, 0),
         }),
       });
-      const data = await response.json();
+
+      // Safely parse JSON response
+      let data;
+      try {
+        const text = await response.text();
+        if (!text) {
+          setKCBError('Empty response from KCB sandbox service');
+          return;
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[v0] JSON parse error:', parseError);
+        setKCBError('Invalid response from KCB sandbox service');
+        return;
+      }
+
       if (!response.ok || !data.success) {
-        setMpesaError(data.error || 'Simulation failed');
+        setKCBError(data?.error || 'KCB sandbox simulation failed');
         return;
       }
       // Directly mark as success — don't rely on polling
-      setMpesaReceiptNumber(data.receiptNumber);
-      setMpesaStatus('success');
-      toast.show('Payment simulated successfully!');
+      setKCBReceiptNumber(data.receiptNumber);
+      setKCBStatus('success');
+      toast.show('KCB sandbox payment simulated successfully!');
       await completeMpesaSale(data.receiptNumber);
     } catch (error) {
-      setMpesaError(error instanceof Error ? error.message : 'Simulation failed');
+      setKCBError(error instanceof Error ? error.message : 'KCB sandbox simulation failed');
     } finally {
-      setMpesaSimulating(false);
+      setKCBSimulating(false);
     }
   };
 
@@ -301,7 +376,7 @@ export function POSTerminal() {
       cartTotal,
       products,
       selectedCustomer,
-      paymentMethod: 'mpesa',
+      paymentMethod: 'kcb',
       amountPaid: cartTotal,
       change: 0,
       userId: user?.id || 'system',
@@ -721,16 +796,16 @@ export function POSTerminal() {
 
       {/* Checkout Modal */}
       {showCheckout && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-slate-700 flex-shrink-0">
               <h3 className="text-xl font-bold text-white">Checkout</h3>
               <button
                 onClick={() => {
-                  if (mpesaStatus === 'waiting' || mpesaStatus === 'initiating') {
+                  if (kcbStatus === 'waiting' || kcbStatus === 'initiating') {
                     if (confirm('M-Pesa payment is in progress. Are you sure you want to cancel?')) {
                       setShowCheckout(false);
-                      setMpesaStatus('idle');
+                      setKCBStatus('idle');
                     }
                   } else {
                     setShowCheckout(false);
@@ -742,7 +817,16 @@ export function POSTerminal() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              {/* Sale Type Selector */}
+              <SaleTypeSelector
+                saleType={saleType}
+                onSaleTypeChange={setSaleType}
+                cartTotal={cartTotal}
+                depositAmount={depositAmount}
+                onDepositChange={setDepositAmount}
+              />
+
               {/* Payment Method */}
               <div>
                 <label className="text-sm text-slate-400 block mb-2">Payment Method</label>
@@ -750,14 +834,14 @@ export function POSTerminal() {
                   {[
                     { id: 'cash', icon: Banknote, label: 'Cash' },
                     { id: 'card', icon: CreditCard, label: 'Card' },
-                    { id: 'mpesa', icon: Smartphone, label: 'M-Pesa' },
+                    { id: 'kcb', icon: Smartphone, label: 'M-Pesa' },
                   ].map(({ id, icon: Icon, label }) => {
-                    const isLocked = mpesaStatus === 'waiting' || mpesaStatus === 'initiating';
-                    const isMpesaUnconfigured = id === 'mpesa' && !mpesaConfigured;
+                    const isLocked = kcbStatus === 'waiting' || kcbStatus === 'initiating';
+                    const isMpesaUnconfigured = id === 'kcb' && !kcbConfigured;
                     return (
                       <button
                         key={id}
-                        onClick={() => setPaymentMethod(id as 'cash' | 'card' | 'mpesa')}
+                        onClick={() => setPaymentMethod(id as 'cash' | 'card' | 'kcb')}
                         disabled={isLocked}
                         className={`p-3 rounded-lg border-2 flex flex-col items-center gap-1 transition relative ${
                           paymentMethod === id
@@ -771,7 +855,7 @@ export function POSTerminal() {
                         </span>
                         {isMpesaUnconfigured && (
                           <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[9px] font-bold px-1 rounded">
-                            {!mpesaEnabled ? 'OFF' : 'KEY'}
+                            {!kcbEnabled ? 'OFF' : 'KEY'}
                           </span>
                         )}
                       </button>
@@ -780,39 +864,39 @@ export function POSTerminal() {
                 </div>
               </div>
 
-              {/* M-Pesa STK Push Section */}
-              {paymentMethod === 'mpesa' && (
+              {/* KCB BUNI STK Push Section */}
+              {paymentMethod === 'kcb' && (
                 <div className="bg-slate-700 rounded-lg p-4 space-y-4">
                   {/* Sandbox badge */}
-                  {mpesaEnvironment === 'sandbox' && (
+                  {kcbEnvironment === 'sandbox' && (
                     <div className="flex items-center gap-2 bg-blue-900/40 border border-blue-700 rounded-lg px-3 py-2">
                       <FlaskConical size={14} className="text-blue-400" />
-                      <span className="text-blue-300 text-xs font-semibold">SANDBOX / UAT MODE</span>
+                      <span className="text-blue-300 text-xs font-semibold">KCB SANDBOX / TESTING MODE</span>
                       <span className="text-blue-400/70 text-xs ml-auto">No real money moves</span>
                     </div>
                   )}
-                  {mpesaStatus === 'idle' && (
+                  {kcbStatus === 'idle' && (
                     <>
-                      {!mpesaConfigured && (
+                      {!kcbConfigured && (
                         <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
                           <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-amber-300 text-sm font-medium">M-Pesa not ready</p>
+                            <p className="text-amber-300 text-sm font-medium">KCB BUNI not ready</p>
                             <p className="text-amber-400/80 text-xs mt-0.5">
-                              {!mpesaEnabled
-                                ? 'Enable M-Pesa in Settings › Payments'
-                                : 'Add Consumer Key & Secret in Settings › Payments'}
+                              {!kcbEnabled
+                                ? 'Enable KCB BUNI in Settings › Payments'
+                                : 'Add Client ID & Secret in Settings › Payments'}
                             </p>
                           </div>
                         </div>
                       )}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm text-slate-400">M-Pesa Phone Number</label>
-                          {mpesaEnvironment === 'sandbox' && (
+                          <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
+                          {kcbEnvironment === 'sandbox' && (
                             <button
                               type="button"
-                              onClick={() => setMpesaPhone('254708374149')}
+                              onClick={() => setKCBPhone('254700000000')}
                               className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
                             >
                               <Zap size={11} />
@@ -822,18 +906,18 @@ export function POSTerminal() {
                         </div>
                         <input
                           type="tel"
-                          value={mpesaPhone}
-                          onChange={(e) => setMpesaPhone(e.target.value)}
-                          placeholder={mpesaEnvironment === 'sandbox' ? '254708374149 (test)' : '07XX XXX XXX'}
+                          value={kcbPhone}
+                          onChange={(e) => setKCBPhone(e.target.value)}
+                          placeholder={kcbEnvironment === 'sandbox' ? '254708374149 (test)' : '07XX XXX XXX'}
                           className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:border-emerald-500 focus:outline-none text-lg"
                         />
-                        {mpesaEnvironment === 'sandbox' && (
+                        {kcbEnvironment === 'sandbox' && (
                           <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254708374149 • PIN: any 4 digits</p>
                         )}
                       </div>
                       <button
                         onClick={handleMpesaPayment}
-                        disabled={!mpesaConfigured || !mpesaPhone || mpesaPhone.length < 9}
+                        disabled={!kcbConfigured || !kcbPhone || kcbPhone.length < 9}
                         className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <Smartphone size={20} />
@@ -842,7 +926,7 @@ export function POSTerminal() {
                     </>
                   )}
 
-                  {(mpesaStatus === 'initiating' || mpesaStatus === 'waiting' || mpesaStatus === 'checking') && (
+                  {(kcbStatus === 'initiating' || kcbStatus === 'waiting' || kcbStatus === 'checking') && (
                     <div className="space-y-4">
                       {/* Saving Action Bar */}
                       <div className="bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border border-emerald-700 rounded-lg p-4">
@@ -853,12 +937,12 @@ export function POSTerminal() {
                             </div>
                             <div>
                               <p className="text-white font-semibold">
-                                {mpesaStatus === 'initiating' && 'Initiating Payment...'}
-                                {mpesaStatus === 'waiting' && 'Waiting for Confirmation...'}
-                                {mpesaStatus === 'checking' && 'Verifying Payment...'}
+                                {kcbStatus === 'initiating' && 'Initiating Payment...'}
+                                {kcbStatus === 'waiting' && 'Waiting for Confirmation...'}
+                                {kcbStatus === 'checking' && 'Verifying Payment...'}
                               </p>
                               <p className="text-emerald-300 text-sm">
-                                KES {cartTotal.toLocaleString()} to {mpesaPhone}
+                                KES {cartTotal.toLocaleString()} to {kcbPhone}
                               </p>
                             </div>
                           </div>
@@ -885,9 +969,9 @@ export function POSTerminal() {
                         </div>
 
                         {/* Timestamp info */}
-                        {mpesaStartTime && (
+                        {kcbStartTime && (
                           <p className="text-xs text-slate-400 mt-2 text-center">
-                            Started at {mpesaStartTime.toLocaleTimeString()}
+                            Started at {kcbStartTime.toLocaleTimeString()}
                           </p>
                         )}
                       </div>
@@ -896,20 +980,20 @@ export function POSTerminal() {
                       <div className="flex items-start gap-3 bg-slate-600/50 rounded-lg p-3">
                         <AlertCircle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-slate-300">
-                          {mpesaStatus === 'initiating' && (
+                          {kcbStatus === 'initiating' && (
                             <p>Connecting to M-Pesa servers. Please wait...</p>
                           )}
-                          {mpesaStatus === 'waiting' && (
+                          {kcbStatus === 'waiting' && (
                             <p>Check your phone for the M-Pesa prompt and enter your PIN to confirm payment.</p>
                           )}
-                          {mpesaStatus === 'checking' && (
+                          {kcbStatus === 'checking' && (
                             <p>Payment detected. Verifying transaction with M-Pesa...</p>
                           )}
                         </div>
                       </div>
 
                       {/* Sandbox simulate button */}
-                      {mpesaEnvironment === 'sandbox' && mpesaStatus === 'waiting' && (
+                      {kcbEnvironment === 'sandbox' && kcbStatus === 'waiting' && (
                         <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
@@ -918,20 +1002,20 @@ export function POSTerminal() {
                             </div>
                             <button
                               onClick={handleSimulatePayment}
-                              disabled={mpesaSimulating}
+                              disabled={kcbSimulating}
                               className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-2 rounded-lg transition whitespace-nowrap"
                             >
-                              {mpesaSimulating ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                              {kcbSimulating ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                               Simulate Success
                             </button>
                           </div>
-                          <p className="text-blue-400/60 text-[10px] mt-1.5">Triggers Daraja sandbox simulate endpoint to mark this payment as successful</p>
+                          <p className="text-blue-400/60 text-[10px] mt-1.5">Simulates KCB sandbox payment to mark this transaction as successful for testing</p>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {mpesaStatus === 'success' && (
+                  {kcbStatus === 'success' && (
                     <div className="space-y-4">
                       {/* Success Action Bar */}
                       <div className="bg-gradient-to-r from-emerald-900/50 to-green-900/50 border border-emerald-600 rounded-lg p-4">
@@ -943,14 +1027,14 @@ export function POSTerminal() {
                           </div>
                         </div>
 
-                        {mpesaReceiptNumber && (
+                        {kcbReceiptNumber && (
                           <div className="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center">
-                            <span className="text-slate-400 text-sm">M-Pesa Receipt</span>
-                            <span className="text-white font-mono font-bold">{mpesaReceiptNumber}</span>
+                            <span className="text-slate-400 text-sm">KCB Receipt Number</span>
+                            <span className="text-white font-mono font-bold">{kcbReceiptNumber}</span>
                           </div>
                         )}
 
-                        {mpesaStartTime && (
+                        {kcbStartTime && (
                           <p className="text-xs text-slate-400 mt-3 text-center">
                             Completed at {new Date().toLocaleTimeString()} ({elapsedSeconds}s)
                           </p>
@@ -965,7 +1049,7 @@ export function POSTerminal() {
                     </div>
                   )}
 
-                  {(mpesaStatus === 'failed' || mpesaStatus === 'cancelled') && (
+                  {(kcbStatus === 'failed' || kcbStatus === 'cancelled') && (
                     <div className="space-y-4">
                       {/* Failed Action Bar */}
                       <div className="bg-gradient-to-r from-red-900/50 to-rose-900/50 border border-red-700 rounded-lg p-4">
@@ -973,19 +1057,19 @@ export function POSTerminal() {
                           <XCircle size={40} className="text-red-400" />
                           <div className="flex-1">
                             <p className="text-white font-bold text-lg">
-                              {mpesaStatus === 'cancelled' ? 'Payment Cancelled' : 'Payment Failed'}
+                              {kcbStatus === 'cancelled' ? 'Payment Cancelled' : 'Payment Failed'}
                             </p>
                             <p className="text-red-300">KES {cartTotal.toLocaleString()} not received</p>
                           </div>
                         </div>
 
-                        {mpesaError && (
+                        {kcbError && (
                           <div className="bg-slate-800/50 rounded-lg p-3">
-                            <p className="text-slate-300 text-sm">{mpesaError}</p>
+                            <p className="text-slate-300 text-sm">{kcbError}</p>
                           </div>
                         )}
 
-                        {mpesaStartTime && (
+                        {kcbStartTime && (
                           <p className="text-xs text-slate-400 mt-3 text-center">
                             Failed after {elapsedSeconds}s at {new Date().toLocaleTimeString()}
                           </p>
@@ -994,9 +1078,9 @@ export function POSTerminal() {
 
                       <button
                         onClick={() => {
-                          setMpesaStatus('idle');
-                          setMpesaError(null);
-                          setMpesaStartTime(null);
+                          setKCBStatus('idle');
+                          setKCBError(null);
+                          setKCBStartTime(null);
                           setElapsedSeconds(0);
                         }}
                         className="w-full py-3 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition flex items-center justify-center gap-2"
@@ -1005,19 +1089,19 @@ export function POSTerminal() {
                       </button>
 
                       {/* Sandbox simulate in failed state */}
-                      {mpesaEnvironment === 'sandbox' && (
+                      {kcbEnvironment === 'sandbox' && (
                         <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <FlaskConical size={14} className="text-blue-400" />
-                              <p className="text-blue-300 text-xs font-medium">Sandbox: simulate a successful payment</p>
+                              <p className="text-blue-300 text-xs font-medium">KCB Sandbox: simulate successful payment</p>
                             </div>
                             <button
                               onClick={handleSimulatePayment}
-                              disabled={mpesaSimulating}
+                              disabled={kcbSimulating}
                               className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-2 rounded-lg transition whitespace-nowrap"
                             >
-                              {mpesaSimulating ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                              {kcbSimulating ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                               Simulate Success
                             </button>
                           </div>
@@ -1029,34 +1113,63 @@ export function POSTerminal() {
               )}
 
               {/* Cash/Card Payment Section */}
-              {paymentMethod !== 'mpesa' && (
+              {paymentMethod !== 'kcb' && (
                 <>
                   {/* Amount Paid */}
                   <div>
-                    <label className="text-sm text-slate-400 block mb-2">Amount Paid</label>
+                    <label className="text-sm text-slate-400 block mb-2">
+                      {saleType === 'lipa_mdogo' || saleType === 'kyama' 
+                        ? 'Deposit Amount (KES)' 
+                        : 'Amount Paid (KES)'}
+                    </label>
                     <input
                       type="number"
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder={cartTotal.toString()}
+                      placeholder={(saleType === 'lipa_mdogo' || saleType === 'kyama' 
+                        ? depositAmount 
+                        : cartTotal).toString()}
                       className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-emerald-500 focus:outline-none text-lg"
                     />
                   </div>
 
                   {/* Summary */}
                   <div className="bg-slate-700 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Total</span>
-                      <span>KES {cartTotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Paid</span>
-                      <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
-                      <span className="text-white">Change</span>
-                      <span className="text-emerald-400">KES {change.toLocaleString()}</span>
-                    </div>
+                    {saleType === 'lipa_mdogo' || saleType === 'kyama' ? (
+                      <>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Total Amount</span>
+                          <span>KES {cartTotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Deposit Today</span>
+                          <span>KES {depositAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Received</span>
+                          <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
+                          <span className="text-white">Balance Due</span>
+                          <span className="text-amber-400">KES {Math.max(0, cartTotal - depositAmount).toLocaleString()}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Total</span>
+                          <span>KES {cartTotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span>Paid</span>
+                          <span>KES {(parseFloat(amountPaid) || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t border-slate-600 pt-2">
+                          <span className="text-white">Change</span>
+                          <span className="text-emerald-400">KES {change.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Complete Button */}
