@@ -311,7 +311,7 @@ export function POSTerminal() {
         setKCBError('KCB payment timed out. Please try again.');
       } else if (statusResult.status === 'insufficient_balance') {
         setKCBStatus('failed');
-        setKCBError('Insufficient M-Pesa balance on account');
+        setKCBError('Insufficient KCB balance on account');
       } else {
         setKCBStatus('failed');
         setKCBError(statusResult.resultDesc || 'KCB payment failed');

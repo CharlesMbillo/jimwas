@@ -103,42 +103,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Load M-Pesa settings
+    // Load KCB BUNI settings
     const { data: settings, error: settingsError } = await supabase
-      .from("mpesa_settings")
+      .from("kcb_settings")
       .select("*")
-      .eq("id", "mpesa-settings")
+      .eq("id", "kcb-settings")
       .single();
 
     if (settingsError || !settings) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa settings not found in database" }),
+        JSON.stringify({ error: "KCB BUNI settings not found in database" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     if (!settings.is_enabled) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa is disabled. Enable it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB BUNI is disabled. Enable it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (!settings.consumer_key || !settings.consumer_secret) {
+    if (!settings.client_id || !settings.client_secret) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Consumer Key and Secret are required. Configure them in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Client ID and Secret are required. Configure them in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (!settings.passkey) {
+    if (!settings.org_passkey) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Passkey is required. Get it from the Safaricom Developer Portal and add it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Organization Passkey is required. Add it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    // Use till_number if present, otherwise short_code
-    const effectiveShortCode = settings.till_number || settings.short_code;
+    // Use org_shortcode for KCB BUNI
+    const effectiveShortCode = settings.org_shortcode;
     if (!effectiveShortCode) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Short Code or Till Number is required. Add it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Organization Shortcode is required. Add it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -166,15 +166,15 @@ Deno.serve(async (req: Request) => {
         ? "https://api.safaricom.co.ke"
         : "https://sandbox.safaricom.co.ke";
 
-    console.log("Getting M-Pesa access token...");
+    console.log("Getting KCB BUNI access token...");
     const accessToken = await getAccessToken(
-      settings.consumer_key,
-      settings.consumer_secret,
+      settings.client_id,
+      settings.client_secret,
       settings.environment
     );
 
     const timestamp = generateTimestamp();
-    const password = generatePassword(effectiveShortCode, settings.passkey, timestamp);
+    const password = generatePassword(effectiveShortCode, settings.org_passkey, timestamp);
 
     const stkBody = {
       BusinessShortCode: effectiveShortCode,

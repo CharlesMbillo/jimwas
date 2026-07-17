@@ -53,12 +53,12 @@ export async function initiateSTKPush(
     try {
       const text = await response.text();
       if (!text) {
-        return { success: false, error: 'Empty response from M-Pesa service' };
+        return { success: false, error: 'Empty response from KCB service' };
       }
       data = JSON.parse(text);
     } catch (parseError) {
       console.error('[v0] JSON parse error in initiateSTKPush:', parseError);
-      return { success: false, error: 'Invalid response from M-Pesa service' };
+      return { success: false, error: 'Invalid response from KCB service' };
     }
 
     if (!response.ok) {
@@ -93,12 +93,12 @@ export async function checkSTKPushStatus(checkoutRequestId: string): Promise<STK
     try {
       const text = await response.text();
       if (!text) {
-        return { success: false, status: 'failed', error: 'Empty response from M-Pesa service' };
+        return { success: false, status: 'failed', error: 'Empty response from KCB service' };
       }
       data = JSON.parse(text);
     } catch (parseError) {
       console.error('[v0] JSON parse error in checkSTKPushStatus:', parseError);
-      return { success: false, status: 'failed', error: 'Invalid response from M-Pesa service' };
+      return { success: false, status: 'failed', error: 'Invalid response from KCB service' };
     }
 
     if (!response.ok) {
