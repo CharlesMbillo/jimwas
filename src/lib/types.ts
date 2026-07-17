@@ -169,3 +169,174 @@ export interface StockAdjustment {
   sync_status: 'pending' | 'synced';
   local_id?: string;
 }
+
+// Payment system types
+export type PaymentMethodCode = 'cash' | 'card' | 'mpesa' | 'kcb';
+
+export interface PaymentMethod {
+  id: string;
+  code: PaymentMethodCode;
+  label: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  transaction_id: string;
+  payment_method_code: PaymentMethodCode;
+  amount: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  reference_number?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KCBTransaction {
+  id: string;
+  payment_transaction_id?: string;
+  checkout_request_id?: string;
+  merchant_request_id?: string;
+  phone_number: string;
+  amount: number;
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled' | 'timeout';
+  result_code?: string;
+  result_desc?: string;
+  kcb_receipt_number?: string;
+  transaction_date?: string;
+  customer_id?: string;
+  cashier_id?: string;
+  cashier_name?: string;
+  callback_received: boolean;
+  callback_payload?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashTransaction {
+  id: string;
+  payment_transaction_id: string;
+  amount_paid: number;
+  change_amount: number;
+  cashier_id?: string;
+  cashier_name?: string;
+  created_at: string;
+}
+
+export interface CardTransaction {
+  id: string;
+  payment_transaction_id: string;
+  card_last_four?: string;
+  card_brand?: string;
+  auth_code?: string;
+  terminal_id?: string;
+  cashier_id?: string;
+  cashier_name?: string;
+  created_at: string;
+}
+
+// Support tables
+export interface Branch {
+  id: string;
+  name: string;
+  location?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  manager_name?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface User {
+  id: string;
+  branch_id?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: 'cashier' | 'supervisor' | 'manager' | 'admin';
+  is_active: boolean;
+  last_login_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description?: string;
+  parent_category_id?: string;
+  display_order?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Receipt {
+  id: string;
+  transaction_id: string;
+  receipt_number: string;
+  receipt_type: 'standard' | 'refund' | 'adjustment' | 'replacement';
+  print_count: number;
+  last_printed_at?: string;
+  email_sent_to?: string;
+  email_sent_at?: string;
+  qr_code_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id?: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string;
+  old_values?: any;
+  new_values?: any;
+  changes?: string;
+  ip_address?: string;
+  user_agent?: string;
+  branch_id?: string;
+  created_at: string;
+}
+
+export interface AppSetting {
+  id: string;
+  branch_id?: string;
+  setting_key: string;
+  setting_value?: any;
+  data_type: 'string' | 'number' | 'boolean' | 'json' | 'array';
+  is_sensitive: boolean;
+  last_modified_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventorySnapshot {
+  id: string;
+  snapshot_date: string;
+  product_id: string;
+  quantity_on_hand?: number;
+  reorder_level?: number;
+  reorder_quantity?: number;
+  branch_id?: string;
+  created_at: string;
+}
+
+export interface SalesTarget {
+  id: string;
+  period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  period_start?: string;
+  period_end?: string;
+  target_amount?: number;
+  target_units?: number;
+  category_id?: string;
+  branch_id?: string;
+  created_at: string;
+  updated_at: string;
+}

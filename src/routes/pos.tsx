@@ -803,7 +803,7 @@ export function POSTerminal() {
               <button
                 onClick={() => {
                   if (kcbStatus === 'waiting' || kcbStatus === 'initiating') {
-                    if (confirm('M-Pesa payment is in progress. Are you sure you want to cancel?')) {
+                    if (confirm('KCB STK Push payment is in progress. Are you sure you want to cancel?')) {
                       setShowCheckout(false);
                       setKCBStatus('idle');
                     }
@@ -834,7 +834,7 @@ export function POSTerminal() {
                   {[
                     { id: 'cash', icon: Banknote, label: 'Cash' },
                     { id: 'card', icon: CreditCard, label: 'Card' },
-                    { id: 'kcb', icon: Smartphone, label: 'M-Pesa' },
+                    { id: 'kcb', icon: Smartphone, label: 'KCB STK PUSH' },
                   ].map(({ id, icon: Icon, label }) => {
                     const isLocked = kcbStatus === 'waiting' || kcbStatus === 'initiating';
                     const isMpesaUnconfigured = id === 'kcb' && !kcbConfigured;
@@ -980,15 +980,9 @@ export function POSTerminal() {
                       <div className="flex items-start gap-3 bg-slate-600/50 rounded-lg p-3">
                         <AlertCircle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-slate-300">
-                          {kcbStatus === 'initiating' && (
-                            <p>Connecting to M-Pesa servers. Please wait...</p>
-                          )}
-                          {kcbStatus === 'waiting' && (
-                            <p>Check your phone for the M-Pesa prompt and enter your PIN to confirm payment.</p>
-                          )}
-                          {kcbStatus === 'checking' && (
-                            <p>Payment detected. Verifying transaction with M-Pesa...</p>
-                          )}
+                          {kcbStatus === 'initiating' && <p>Connecting to KCB servers. Please wait...</p>}
+                          {kcbStatus === 'waiting' && <p>Check your phone for the KCB STK Push prompt and enter your PIN to confirm payment.</p>}
+                          {kcbStatus === 'processing' && <p>Payment detected. Verifying transaction with KCB...</p>}
                         </div>
                       </div>
 
