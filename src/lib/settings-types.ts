@@ -26,6 +26,8 @@ export interface KCBSettings {
   client_secret: string;
   org_shortcode: string;
   org_passkey: string;
+  passkey?: string;
+  timeout_url?: string;
   callback_url?: string;
   public_cert_path?: string;
   default_phone_country_code: string;
@@ -113,6 +115,8 @@ export const DEFAULT_KCB_SETTINGS: KCBSettings = {
   client_secret: '',
   org_shortcode: '',
   org_passkey: '',
+  passkey: '',
+  timeout_url: '',
   default_phone_country_code: '254',
   callback_url: '',
   public_cert_path: '',
