@@ -150,14 +150,17 @@ export function KCBPaymentModal({
       const errorMsg = error instanceof Error ? error.message : 'Failed to initiate payment';
       console.error('[v0] Payment initiation error:', errorMsg, error);
       
-      // Provide helpful error messages
+      // Provide helpful error messages based on error type
       let displayError = errorMsg;
-      if (errorMsg.includes('not loaded') || errorMsg.includes('settings not found')) {
-        displayError = 'KCB settings not configured. Please check Settings > Payments > KCB configuration.';
-      } else if (errorMsg.includes('Missing required') || errorMsg.includes('validation failed')) {
-        displayError = 'KCB configuration incomplete. Ensure all required fields are filled in Settings > Payments.';
+      if (errorMsg.includes('Supabase not configured') || errorMsg.includes('environment variable')) {
+        displayError = 'System error: Supabase not configured. This is a deployment issue - contact support.';
+      } else if (errorMsg.includes('not loaded') || errorMsg.includes('settings not found') || errorMsg.includes('not found in database')) {
+        displayError = 'KCB not configured. Go to Settings > Payments > KCB BUNI and fill in all required fields (Client ID, Secret, Shortcode, Passkey).';
+      } else if (errorMsg.includes('Missing required') || errorMsg.includes('validation failed') || errorMsg.includes('is required')) {
+        displayError = 'KCB incomplete. Go to Settings > Payments > KCB BUNI and ensure all fields are filled: Client ID, Secret, Organization Shortcode, Organization Passkey.';
       }
       
+      console.error('[v0] Display error:', displayError);
       setErrorMessage(displayError);
       setStep('failed');
       setIsProcessing(false);

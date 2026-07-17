@@ -23,11 +23,18 @@ class ConfigManager {
     }
 
     try {
+      console.log('[v0] Attempting to load KCB settings from Supabase...');
       const supabase = getSupabase();
+      
       if (!supabase) {
-        throw new Error('Supabase client not initialized');
+        console.error('[v0] Supabase client initialization failed');
+        console.error('[v0] Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in .env.development.local');
+        throw new Error(
+          'Supabase not configured. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables are set.'
+        );
       }
 
+      console.log('[v0] Supabase client initialized. Querying kcb_settings table...');
       const { data, error } = await supabase
         .from('kcb_settings')
         .select('*')
@@ -35,17 +42,27 @@ class ConfigManager {
         .single();
 
       if (error) {
-        throw new Error(`Failed to load KCB settings: ${error.message}`);
+        console.error('[v0] Supabase query error:', error);
+        if (error.code === 'PGRST116') {
+          throw new Error(
+            'KCB settings not found in database. Please configure KCB in Settings > Payments.'
+          );
+        }
+        throw new Error(`Failed to load KCB settings from Supabase: ${error.message}`);
       }
 
       if (!data) {
-        throw new Error('KCB settings not found in database');
+        throw new Error(
+          'KCB settings not found. Please configure KCB in Settings > Payments.'
+        );
       }
 
+      console.log('[v0] KCB settings loaded successfully from Supabase');
       this.supabaseSettings = data as KCBSettings;
       return this.supabaseSettings;
     } catch (error) {
-      console.error('[v0] Failed to load KCB Supabase settings:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('[v0] Failed to load KCB Supabase settings:', errorMsg);
       throw error;
     }
   }
