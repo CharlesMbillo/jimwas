@@ -908,11 +908,11 @@ export function POSTerminal() {
                           type="tel"
                           value={kcbPhone}
                           onChange={(e) => setKCBPhone(e.target.value)}
-                          placeholder={kcbEnvironment === 'sandbox' ? '254708374149 (test)' : '07XX XXX XXX'}
+                          placeholder={kcbEnvironment === 'sandbox' ? '254700000000 (test)' : '07XX XXX XXX'}
                           className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:border-emerald-500 focus:outline-none text-lg"
                         />
                         {kcbEnvironment === 'sandbox' && (
-                          <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254708374149 • PIN: any 4 digits</p>
+                          <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254700000000 • PIN: any 4 digits</p>
                         )}
                       </div>
                       <button
