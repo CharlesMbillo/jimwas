@@ -339,7 +339,7 @@ export function POSTerminal() {
         body: JSON.stringify({
           checkoutRequestId: kcbCheckoutId || `sim-${Date.now()}`,
           phone: kcbPhone,
-          amount: cart.reduce((s, i) => s + i.product.selling_price * i.quantity, 0),
+          amount: cart.reduce((s, i) => s + i.subtotal, 0),
         }),
       });
 
