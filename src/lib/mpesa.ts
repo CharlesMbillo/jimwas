@@ -35,6 +35,7 @@ export async function initiateSTKPush(
   }
 ): Promise<STKPushResponse> {
   try {
+    console.log('[v0] Initiating STK Push for phone:', phone, 'amount:', amount);
     const response = await fetch(`${SUPABASE_URL}/functions/v1/mpesa-stk`, {
       method: 'POST',
       headers: {
@@ -48,21 +49,28 @@ export async function initiateSTKPush(
       }),
     });
 
+    console.log('[v0] STK Push response status:', response.status);
+
     // Safely parse JSON response
     let data;
     try {
       const text = await response.text();
+      console.log('[v0] STK Push response text length:', text?.length, 'first 100 chars:', text?.substring(0, 100));
+      
       if (!text) {
-        return { success: false, error: 'Empty response from KCB service' };
+        console.error('[v0] Empty response from KCB service');
+        return { success: false, error: 'Empty response from KCB service - check server logs' };
       }
       data = JSON.parse(text);
+      console.log('[v0] STK Push parsed response:', data);
     } catch (parseError) {
       console.error('[v0] JSON parse error in initiateSTKPush:', parseError);
-      return { success: false, error: 'Invalid response from KCB service' };
+      return { success: false, error: 'Invalid response from KCB service - check server logs' };
     }
 
     if (!response.ok) {
-      return { success: false, error: data?.error || 'Failed to initiate payment' };
+      console.error('[v0] STK Push failed with status', response.status, ':', data);
+      return { success: false, error: data?.error || `Failed to initiate payment (${response.status})` };
     }
 
     return {

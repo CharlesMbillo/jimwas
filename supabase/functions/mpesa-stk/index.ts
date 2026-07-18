@@ -55,22 +55,38 @@ async function getAccessToken(
       : "https://sandbox.safaricom.co.ke";
 
   const credentials = btoa(`${consumerKey}:${consumerSecret}`);
-  const resp = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-    headers: { Authorization: `Basic ${credentials}` },
-  });
+  console.log(`[getAccessToken] Calling ${baseUrl}/oauth/v1/generate with environment: ${environment}`);
+  
+  try {
+    const resp = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${credentials}` },
+    });
 
-  const text = await resp.text();
-  if (!resp.ok) {
-    let msg = `Auth failed (${resp.status})`;
-    try {
-      const json = JSON.parse(text);
-      msg = json.error_description || json.errorMessage || json.error || msg;
-    } catch { /* ignore */ }
-    throw new Error(msg);
+    console.log(`[getAccessToken] Auth response status: ${resp.status}`);
+    const text = await resp.text();
+    
+    if (!resp.ok) {
+      console.error(`[getAccessToken] Auth failed: ${text}`);
+      let msg = `Auth failed (${resp.status})`;
+      try {
+        const json = JSON.parse(text);
+        msg = json.error_description || json.errorMessage || json.error || msg;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    
+    const data = JSON.parse(text);
+    if (!data.access_token) {
+      console.error(`[getAccessToken] No access token in response: ${text}`);
+      throw new Error("No access token in Safaricom response");
+    }
+    
+    console.log(`[getAccessToken] Successfully obtained access token`);
+    return data.access_token;
+  } catch (error) {
+    console.error(`[getAccessToken] Exception:`, error instanceof Error ? error.message : error);
+    throw error;
   }
-  const data = JSON.parse(text);
-  if (!data.access_token) throw new Error("No access token in Safaricom response");
-  return data.access_token;
 }
 
 Deno.serve(async (req: Request) => {
@@ -167,11 +183,20 @@ Deno.serve(async (req: Request) => {
         : "https://sandbox.safaricom.co.ke";
 
     console.log("Getting KCB BUNI access token...");
-    const accessToken = await getAccessToken(
-      settings.client_id,
-      settings.client_secret,
-      settings.environment
-    );
+    
+    // In sandbox mode with test credentials, mock the token generation
+    let accessToken: string;
+    if (settings.environment === 'sandbox' && 
+        (settings.client_id?.includes('test') || settings.client_id === 'demo')) {
+      console.log("[SANDBOX MODE] Mocking access token for testing");
+      accessToken = btoa(`sandbox-token-${Date.now()}`);
+    } else {
+      accessToken = await getAccessToken(
+        settings.client_id,
+        settings.client_secret,
+        settings.environment
+      );
+    }
 
     const timestamp = generateTimestamp();
     const password = generatePassword(effectiveShortCode, settings.org_passkey, timestamp);
@@ -247,9 +272,16 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("STK Push error:", error);
+    const errorMsg = error instanceof Error ? error.message : "Internal server error";
+    console.error("STK Push error:", errorMsg, error);
+    const errorResponse = JSON.stringify({ 
+      success: false,
+      error: errorMsg,
+      timestamp: new Date().toISOString()
+    });
+    console.log("Sending error response:", errorResponse);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Internal error" }),
+      errorResponse,
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
