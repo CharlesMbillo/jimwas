@@ -217,22 +217,57 @@ Deno.serve(async (req: Request) => {
 
     console.log("STK Push request:", JSON.stringify({ ...stkBody, Password: "***" }));
 
-    const stkResp = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(stkBody),
-    });
+    // In sandbox mode with test credentials, mock the response
+    let stkData;
+    if (settings.environment === 'sandbox' && 
+        (settings.client_id?.includes('test') || settings.client_id === 'demo')) {
+      console.log("[SANDBOX] Mocking STK Push response for testing");
+      stkData = {
+        MerchantRequestID: `merchant-${Date.now()}`,
+        CheckoutRequestID: `checkout-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        ResponseCode: "0",
+        ResponseDescription: "Success. Request accepted for processing.",
+        CustomerMessage: "Success. Request accepted for processing.",
+      };
+    } else {
+      const stkResp = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(stkBody),
+      });
 
-    const stkData = await stkResp.json();
-    console.log("STK Push response:", JSON.stringify(stkData));
+      try {
+        const stkText = await stkResp.text();
+        console.log("STK Push raw response:", stkText);
+        
+        if (!stkText) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Empty response from Safaricom API" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        stkData = JSON.parse(stkText);
+      } catch (parseError) {
+        console.error("Failed to parse STK Push response:", parseError);
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to parse Safaricom response" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
-    if (stkData.errorCode || stkData.ResponseCode !== "0") {
+    console.log("STK Push parsed response:", JSON.stringify(stkData));
+
+    // Check for errors
+    if (stkData.errorCode || (stkData.ResponseCode && stkData.ResponseCode !== "0")) {
       const errMsg = stkData.errorMessage || stkData.ResponseDescription || stkData.CustomerMessage || "STK Push failed";
+      console.error("STK Push error from Safaricom:", errMsg);
       return new Response(
-        JSON.stringify({ error: errMsg, safaricomCode: stkData.errorCode || stkData.ResponseCode }),
+        JSON.stringify({ success: false, error: errMsg, safaricomCode: stkData.errorCode || stkData.ResponseCode }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -240,16 +275,23 @@ Deno.serve(async (req: Request) => {
     const checkoutRequestId = stkData.CheckoutRequestID;
     const merchantRequestId = stkData.MerchantRequestID;
 
-    // Store in mpesa_transactions
-    const { data: mpesaTx, error: insertError } = await supabase
-      .from("mpesa_transactions")
+    if (!checkoutRequestId) {
+      console.error("No CheckoutRequestID in response:", stkData);
+      return new Response(
+        JSON.stringify({ success: false, error: "No CheckoutRequestID from Safaricom" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Store in kcb_transactions table
+    const { data: kcbTx, error: insertError } = await supabase
+      .from("kcb_transactions")
       .insert({
         checkout_request_id: checkoutRequestId,
         merchant_request_id: merchantRequestId,
         phone_number: formattedPhone,
         amount: body.amount,
         status: "pending",
-        transaction_id: body.transactionId || null,
         customer_id: body.customerId || null,
         cashier_id: body.cashierId || null,
         cashier_name: body.cashierName || null,
@@ -258,7 +300,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError) {
-      console.error("Failed to store mpesa_transaction:", insertError.message);
+      console.error("Failed to store kcb_transaction:", insertError.message);
     }
 
     return new Response(
@@ -266,7 +308,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         checkoutRequestId,
         merchantRequestId,
-        mpesaTransactionId: mpesaTx?.id,
+        kcbTransactionId: kcbTx?.id,
         message: "STK Push sent. Ask customer to check their phone.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
