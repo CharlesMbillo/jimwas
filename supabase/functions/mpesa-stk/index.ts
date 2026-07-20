@@ -55,22 +55,38 @@ async function getAccessToken(
       : "https://sandbox.safaricom.co.ke";
 
   const credentials = btoa(`${consumerKey}:${consumerSecret}`);
-  const resp = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-    headers: { Authorization: `Basic ${credentials}` },
-  });
+  console.log(`[getAccessToken] Calling ${baseUrl}/oauth/v1/generate with environment: ${environment}`);
+  
+  try {
+    const resp = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${credentials}` },
+    });
 
-  const text = await resp.text();
-  if (!resp.ok) {
-    let msg = `Auth failed (${resp.status})`;
-    try {
-      const json = JSON.parse(text);
-      msg = json.error_description || json.errorMessage || json.error || msg;
-    } catch { /* ignore */ }
-    throw new Error(msg);
+    console.log(`[getAccessToken] Auth response status: ${resp.status}`);
+    const text = await resp.text();
+    
+    if (!resp.ok) {
+      console.error(`[getAccessToken] Auth failed: ${text}`);
+      let msg = `Auth failed (${resp.status})`;
+      try {
+        const json = JSON.parse(text);
+        msg = json.error_description || json.errorMessage || json.error || msg;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    
+    const data = JSON.parse(text);
+    if (!data.access_token) {
+      console.error(`[getAccessToken] No access token in response: ${text}`);
+      throw new Error("No access token in Safaricom response");
+    }
+    
+    console.log(`[getAccessToken] Successfully obtained access token`);
+    return data.access_token;
+  } catch (error) {
+    console.error(`[getAccessToken] Exception:`, error instanceof Error ? error.message : error);
+    throw error;
   }
-  const data = JSON.parse(text);
-  if (!data.access_token) throw new Error("No access token in Safaricom response");
-  return data.access_token;
 }
 
 Deno.serve(async (req: Request) => {
@@ -103,42 +119,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Load M-Pesa settings
+    // Load KCB BUNI settings
     const { data: settings, error: settingsError } = await supabase
-      .from("mpesa_settings")
+      .from("kcb_settings")
       .select("*")
-      .eq("id", "mpesa-settings")
+      .eq("id", "kcb-settings")
       .single();
 
     if (settingsError || !settings) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa settings not found in database" }),
+        JSON.stringify({ error: "KCB BUNI settings not found in database" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     if (!settings.is_enabled) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa is disabled. Enable it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB BUNI is disabled. Enable it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (!settings.consumer_key || !settings.consumer_secret) {
+    if (!settings.client_id || !settings.client_secret) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Consumer Key and Secret are required. Configure them in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Client ID and Secret are required. Configure them in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (!settings.passkey) {
+    if (!settings.org_passkey) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Passkey is required. Get it from the Safaricom Developer Portal and add it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Organization Passkey is required. Add it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    // Use till_number if present, otherwise short_code
-    const effectiveShortCode = settings.till_number || settings.short_code;
+    // Use org_shortcode for KCB BUNI
+    const effectiveShortCode = settings.org_shortcode;
     if (!effectiveShortCode) {
       return new Response(
-        JSON.stringify({ error: "M-Pesa Short Code or Till Number is required. Add it in Settings > Payments." }),
+        JSON.stringify({ error: "KCB Organization Shortcode is required. Add it in Settings > Payments." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -166,15 +182,24 @@ Deno.serve(async (req: Request) => {
         ? "https://api.safaricom.co.ke"
         : "https://sandbox.safaricom.co.ke";
 
-    console.log("Getting M-Pesa access token...");
-    const accessToken = await getAccessToken(
-      settings.consumer_key,
-      settings.consumer_secret,
-      settings.environment
-    );
+    console.log("Getting KCB BUNI access token...");
+    
+    // In sandbox mode with test credentials, mock the token generation
+    let accessToken: string;
+    if (settings.environment === 'sandbox' && 
+        (settings.client_id?.includes('test') || settings.client_id === 'demo')) {
+      console.log("[SANDBOX MODE] Mocking access token for testing");
+      accessToken = btoa(`sandbox-token-${Date.now()}`);
+    } else {
+      accessToken = await getAccessToken(
+        settings.client_id,
+        settings.client_secret,
+        settings.environment
+      );
+    }
 
     const timestamp = generateTimestamp();
-    const password = generatePassword(effectiveShortCode, settings.passkey, timestamp);
+    const password = generatePassword(effectiveShortCode, settings.org_passkey, timestamp);
 
     const stkBody = {
       BusinessShortCode: effectiveShortCode,
@@ -192,22 +217,57 @@ Deno.serve(async (req: Request) => {
 
     console.log("STK Push request:", JSON.stringify({ ...stkBody, Password: "***" }));
 
-    const stkResp = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(stkBody),
-    });
+    // In sandbox mode with test credentials, mock the response
+    let stkData;
+    if (settings.environment === 'sandbox' && 
+        (settings.client_id?.includes('test') || settings.client_id === 'demo')) {
+      console.log("[SANDBOX] Mocking STK Push response for testing");
+      stkData = {
+        MerchantRequestID: `merchant-${Date.now()}`,
+        CheckoutRequestID: `checkout-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        ResponseCode: "0",
+        ResponseDescription: "Success. Request accepted for processing.",
+        CustomerMessage: "Success. Request accepted for processing.",
+      };
+    } else {
+      const stkResp = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(stkBody),
+      });
 
-    const stkData = await stkResp.json();
-    console.log("STK Push response:", JSON.stringify(stkData));
+      try {
+        const stkText = await stkResp.text();
+        console.log("STK Push raw response:", stkText);
+        
+        if (!stkText) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Empty response from Safaricom API" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        stkData = JSON.parse(stkText);
+      } catch (parseError) {
+        console.error("Failed to parse STK Push response:", parseError);
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to parse Safaricom response" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
-    if (stkData.errorCode || stkData.ResponseCode !== "0") {
+    console.log("STK Push parsed response:", JSON.stringify(stkData));
+
+    // Check for errors
+    if (stkData.errorCode || (stkData.ResponseCode && stkData.ResponseCode !== "0")) {
       const errMsg = stkData.errorMessage || stkData.ResponseDescription || stkData.CustomerMessage || "STK Push failed";
+      console.error("STK Push error from Safaricom:", errMsg);
       return new Response(
-        JSON.stringify({ error: errMsg, safaricomCode: stkData.errorCode || stkData.ResponseCode }),
+        JSON.stringify({ success: false, error: errMsg, safaricomCode: stkData.errorCode || stkData.ResponseCode }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -215,16 +275,23 @@ Deno.serve(async (req: Request) => {
     const checkoutRequestId = stkData.CheckoutRequestID;
     const merchantRequestId = stkData.MerchantRequestID;
 
-    // Store in mpesa_transactions
-    const { data: mpesaTx, error: insertError } = await supabase
-      .from("mpesa_transactions")
+    if (!checkoutRequestId) {
+      console.error("No CheckoutRequestID in response:", stkData);
+      return new Response(
+        JSON.stringify({ success: false, error: "No CheckoutRequestID from Safaricom" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Store in kcb_transactions table
+    const { data: kcbTx, error: insertError } = await supabase
+      .from("kcb_transactions")
       .insert({
         checkout_request_id: checkoutRequestId,
         merchant_request_id: merchantRequestId,
         phone_number: formattedPhone,
         amount: body.amount,
         status: "pending",
-        transaction_id: body.transactionId || null,
         customer_id: body.customerId || null,
         cashier_id: body.cashierId || null,
         cashier_name: body.cashierName || null,
@@ -233,7 +300,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError) {
-      console.error("Failed to store mpesa_transaction:", insertError.message);
+      console.error("Failed to store kcb_transaction:", insertError.message);
     }
 
     return new Response(
@@ -241,15 +308,22 @@ Deno.serve(async (req: Request) => {
         success: true,
         checkoutRequestId,
         merchantRequestId,
-        mpesaTransactionId: mpesaTx?.id,
+        kcbTransactionId: kcbTx?.id,
         message: "STK Push sent. Ask customer to check their phone.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("STK Push error:", error);
+    const errorMsg = error instanceof Error ? error.message : "Internal server error";
+    console.error("STK Push error:", errorMsg, error);
+    const errorResponse = JSON.stringify({ 
+      success: false,
+      error: errorMsg,
+      timestamp: new Date().toISOString()
+    });
+    console.log("Sending error response:", errorResponse);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Internal error" }),
+      errorResponse,
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

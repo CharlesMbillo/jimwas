@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
     const body: MpesaCallbackBody = await req.json();
     const { stkCallback } = body.Body;
 
-    console.log('M-Pesa Callback received:', JSON.stringify(body, null, 2));
+    console.log('KCB BUNI Callback received:', JSON.stringify(body, null, 2));
 
     const checkoutRequestId = stkCallback.CheckoutRequestID;
     const merchantRequestId = stkCallback.MerchantRequestID;

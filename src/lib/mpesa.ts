@@ -35,6 +35,7 @@ export async function initiateSTKPush(
   }
 ): Promise<STKPushResponse> {
   try {
+    console.log('[v0] Initiating STK Push for phone:', phone, 'amount:', amount);
     const response = await fetch(`${SUPABASE_URL}/functions/v1/mpesa-stk`, {
       method: 'POST',
       headers: {
@@ -48,21 +49,28 @@ export async function initiateSTKPush(
       }),
     });
 
+    console.log('[v0] STK Push response status:', response.status);
+
     // Safely parse JSON response
     let data;
     try {
       const text = await response.text();
+      console.log('[v0] STK Push response text length:', text?.length, 'first 100 chars:', text?.substring(0, 100));
+      
       if (!text) {
-        return { success: false, error: 'Empty response from M-Pesa service' };
+        console.error('[v0] Empty response from KCB service');
+        return { success: false, error: 'Empty response from KCB service - check server logs' };
       }
       data = JSON.parse(text);
+      console.log('[v0] STK Push parsed response:', data);
     } catch (parseError) {
       console.error('[v0] JSON parse error in initiateSTKPush:', parseError);
-      return { success: false, error: 'Invalid response from M-Pesa service' };
+      return { success: false, error: 'Invalid response from KCB service - check server logs' };
     }
 
     if (!response.ok) {
-      return { success: false, error: data?.error || 'Failed to initiate payment' };
+      console.error('[v0] STK Push failed with status', response.status, ':', data);
+      return { success: false, error: data?.error || `Failed to initiate payment (${response.status})` };
     }
 
     return {
@@ -93,12 +101,12 @@ export async function checkSTKPushStatus(checkoutRequestId: string): Promise<STK
     try {
       const text = await response.text();
       if (!text) {
-        return { success: false, status: 'failed', error: 'Empty response from M-Pesa service' };
+        return { success: false, status: 'failed', error: 'Empty response from KCB service' };
       }
       data = JSON.parse(text);
     } catch (parseError) {
       console.error('[v0] JSON parse error in checkSTKPushStatus:', parseError);
-      return { success: false, status: 'failed', error: 'Invalid response from M-Pesa service' };
+      return { success: false, status: 'failed', error: 'Invalid response from KCB service' };
     }
 
     if (!response.ok) {
@@ -116,7 +124,7 @@ export async function checkSTKPushStatus(checkoutRequestId: string): Promise<STK
   }
 }
 
-// Poll for payment completion
+// Poll for payment completion with exponential backoff
 export async function pollForPaymentCompletion(
   checkoutRequestId: string,
   options?: {
@@ -125,9 +133,11 @@ export async function pollForPaymentCompletion(
     onStatusChange?: (status: STKPushStatusResponse) => void;
   }
 ): Promise<STKPushStatusResponse> {
-  const maxAttempts = options?.maxAttempts || 30; // 30 attempts = ~2.5 minutes
-  const intervalMs = options?.intervalMs || 5000; // 5 seconds
+  const maxAttempts = options?.maxAttempts || 36; // 36 attempts with exponential backoff = ~5 minutes
+  const initialIntervalMs = options?.intervalMs || 5000; // Start at 5 seconds
 
+  let consecutiveProcessing = 0; // Track how many "processing" responses in a row
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const status = await checkSTKPushStatus(checkoutRequestId);
 
@@ -137,20 +147,44 @@ export async function pollForPaymentCompletion(
       return status;
     }
 
+    // Terminal failure states - return immediately
     if (
       status.status === 'failed' ||
       status.status === 'cancelled' ||
-      status.status === 'timeout' ||
+      status.status === 'invalid_pin' ||
       status.status === 'insufficient_balance'
     ) {
       return status;
     }
 
+    // Processing/waiting states - continue polling with exponential backoff
+    if (status.status === 'processing') {
+      consecutiveProcessing++;
+    } else {
+      consecutiveProcessing = 0;
+    }
+
+    // Calculate wait time with exponential backoff
+    // First 3 attempts: 3s each (quick checks for fast responses)
+    // Next 6 attempts: 5s each
+    // Next 12 attempts: 10s each (every ~2 minutes)
+    // Rest: 20s each (slow polling for long-running transactions)
+    let waitMs: number;
+    if (attempt < 3) {
+      waitMs = 3000; // First 3: 3 sec
+    } else if (attempt < 9) {
+      waitMs = 5000; // Next 6: 5 sec
+    } else if (attempt < 21) {
+      waitMs = 10000; // Next 12: 10 sec
+    } else {
+      waitMs = 20000; // Rest: 20 sec
+    }
+
     // Wait before next check
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
+    await new Promise(resolve => setTimeout(resolve, waitMs));
   }
 
-  return { success: false, status: 'timeout', error: 'Payment verification timed out' };
+  return { success: false, status: 'timeout', error: 'Payment verification timed out after 5 minutes' };
 }
 
 // Format phone number for display

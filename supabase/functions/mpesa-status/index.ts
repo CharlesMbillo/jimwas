@@ -70,9 +70,15 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (txError || !mpesaTx) {
+      // Transaction not in DB yet - callback may still be in transit
+      // Return "processing" status instead of error to avoid premature failure
       return new Response(
-        JSON.stringify({ error: "Transaction not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: true,
+          status: "processing",
+          resultDesc: "Waiting for payment confirmation from KCB..."
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -89,16 +95,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get M-Pesa settings for live query
+    // Get KCB BUNI settings for live query
     const { data: settings } = await supabase
-      .from("mpesa_settings")
+      .from("kcb_settings")
       .select("*")
-      .eq("id", "mpesa-settings")
+      .eq("id", "kcb-settings")
       .single();
 
     // If we can't query Safaricom (missing credentials), return current DB status
-    const effectiveShortCode = settings?.till_number || settings?.short_code;
-    if (!settings?.consumer_key || !settings?.consumer_secret || !settings?.passkey || !effectiveShortCode) {
+    const effectiveShortCode = settings?.org_shortcode;
+    if (!settings?.client_id || !settings?.client_secret || !settings?.org_passkey || !effectiveShortCode) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -116,13 +122,13 @@ Deno.serve(async (req: Request) => {
         : "https://sandbox.safaricom.co.ke";
 
     const accessToken = await getAccessToken(
-      settings.consumer_key,
-      settings.consumer_secret,
+      settings.client_id,
+      settings.client_secret,
       settings.environment
     );
 
     const timestamp = generateTimestamp();
-    const password = btoa(effectiveShortCode + settings.passkey + timestamp);
+    const password = btoa(effectiveShortCode + settings.org_passkey + timestamp);
 
     const queryResp = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
       method: "POST",
