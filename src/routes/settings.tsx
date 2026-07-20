@@ -879,6 +879,30 @@ function PaymentsTab({
                   <p className="text-xs text-slate-500 mt-1">Kenya country code: 254</p>
                 </div>
               </div>
+              
+              {/* Production mode: Initiator Passkey */}
+              {kcbSettings.environment === 'production' && (
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1.5">
+                    Initiator Passkey <span className="text-red-400">*</span> <span className="text-[10px] text-amber-400">(Production Only)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSecret ? 'text' : 'password'}
+                      value={kcbSettings.passkey || ''}
+                      onChange={(e) => onMpesaChange({ ...kcbSettings, passkey: e.target.value })}
+                      className={`w-full px-4 py-3 pr-12 bg-slate-700 text-white rounded-lg border focus:border-emerald-500 focus:outline-none font-mono text-sm ${
+                        kcbSettings.environment === 'production' && !kcbSettings.passkey ? 'border-amber-600' : 'border-slate-600'
+                      }`}
+                      placeholder="Safaricom portal initiator passkey for production"
+                    />
+                    <button type="button" onClick={onToggleSecret} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                      {showSecret ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">{"Get from Safaricom portal: Settings > Security > Initiator Passkey"}</p>
+                </div>
+              )}
             </div>
 
             {/* SECTION 4: KCB IPN Callback URLs */}

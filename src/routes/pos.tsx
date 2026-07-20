@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Minus, Trash2, Search, User, ShoppingCart, Banknote, CreditCard, Smartphone, X, Package, Archive, ArchiveRestore, Loader2, CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Zap } from 'lucide-react';
-import { generateId, saveProduct, getAllProducts, getAllCustomers, saveCustomer, getKCBSettings } from '../lib/db';
+import { generateId, saveProduct, getAllProducts, getAllCustomers, saveCustomer, getKCBSettings, saveKCBPaymentTransaction, updateKCBTransactionStatus } from '../lib/db';
 import { syncInsertCustomer, syncInsertProduct, getSupabase } from '../lib/sync';
 import { logSaleCompleted, logCustomerCreated } from '../lib/audit';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
+import { KCBPaymentModal } from '../components/KCBPaymentModal';
+import { KCBTransactionHistory } from '../components/KCBTransactionHistory';
 import { initiateSTKPush, pollForPaymentCompletion } from '../lib/mpesa';
 import { completeSale, validatePhoneNumber, validatePrice, validateStock, sanitizeInput } from '../lib/transaction-utils';
 import { useDebounce } from '../hooks/useDebounce';
 import { SaleTypeSelector } from '../components/SaleTypeSelector';
 import type { Product, Customer, CartItem } from '../lib/types';
+import type { KCBPaymentTransaction } from '../lib/db';
 
 const LOYALTY_POINTS_PER_SHILLING = 100;
 
@@ -44,6 +47,10 @@ export function POSTerminal() {
   const [kcbConfigured, setKCBConfigured] = useState<boolean>(false);
   const [kcbEnvironment, setKCBEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [kcbSimulating, setKCBSimulating] = useState(false);
+  
+  // KCB Payment Modal state
+  const [showKCBModal, setShowKCBModal] = useState(false);
+  const [lastKCBTransaction, setLastKCBTransaction] = useState<KCBPaymentTransaction | null>(null);
   
   // Sale type state
   const [saleType, setSaleType] = useState<'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama'>('standard');
@@ -83,7 +90,7 @@ export function POSTerminal() {
   }, [kcbStatus, kcbStartTime]);
 
   const loadData = async () => {
-    const [prods, custs, idbMpesa] = await Promise.all([
+    const [prods, custs, idbKcb] = await Promise.all([
       getAllProducts(),
       getAllCustomers(),
       getKCBSettings(),
@@ -92,24 +99,24 @@ export function POSTerminal() {
     setCustomers(custs);
 
     // Always try Supabase first for KCB settings (authoritative source)
-    let mpesa = idbMpesa;
+    let kcbSettings = idbKcb;
     const supabase = getSupabase();
     if (supabase) {
       const { data } = await supabase
         .from('kcb_settings')
         .select('*')
-        .eq('id', 'mpesa-settings')
+        .eq('id', 'kcb-settings')
         .maybeSingle();
-      if (data) mpesa = data;
+      if (data) kcbSettings = data;
     }
 
-    setKCBEnabled(mpesa?.is_enabled ?? false);
-    setKCBEnvironment(mpesa?.environment ?? 'sandbox');
-    // M-Pesa is "configured" when enabled + has consumer key + secret (minimum to attempt)
-    // passkey and short_code are validated at the edge function level with clear errors
-    const hasCredentials = !!(mpesa?.is_enabled &&
-      mpesa.consumer_key &&
-      mpesa.consumer_secret);
+    setKCBEnabled(kcbSettings?.is_enabled ?? false);
+    setKCBEnvironment(kcbSettings?.environment ?? 'sandbox');
+    // KCB is "configured" when enabled + has client_id + client_secret (minimum to attempt)
+    // passkey is only required in production mode
+    const hasCredentials = !!(kcbSettings?.is_enabled &&
+      kcbSettings.client_id &&
+      kcbSettings.client_secret);
     setKCBConfigured(hasCredentials);
   };
 
@@ -549,6 +556,80 @@ export function POSTerminal() {
     }
   }, [cart, cartTotal, products, selectedCustomer, paymentMethod, amountPaid, change, user?.id, toast]);
 
+  /**
+   * Handle KCB payment completion
+   */
+  const handleKCBPaymentComplete = useCallback(async (transaction: KCBPaymentTransaction) => {
+    if (transaction.status !== 'success') {
+      toast.show('KCB payment not successful. Please try again or use another method.', 'error');
+      return;
+    }
+
+    // Mark payment as processed and complete the sale
+    try {
+      setLastKCBTransaction(transaction);
+      setShowKCBModal(false);
+
+      // Complete the sale with KCB payment
+      const result = await completeSale({
+        cart,
+        cartTotal,
+        products,
+        selectedCustomer,
+        paymentMethod: 'kcb',
+        amountPaid: transaction.amount / 100,
+        change: 0,
+        userId: user?.id || 'system',
+        saleType,
+        depositAmount: 0,
+        balanceAmount: 0,
+        kcbReceiptNumber: transaction.mpesa_receipt_number || undefined,
+        kcbTransactionId: transaction.id,
+      });
+
+      if (result.success) {
+        await logSaleCompleted(result.transactionId, {
+          cart,
+          total_amount: cartTotal,
+          kcb_receipt: transaction.mpesa_receipt_number,
+        }, user?.id);
+        clearCart();
+        loadData();
+        toast.show(`Payment successful! Receipt: ${transaction.mpesa_receipt_number}`);
+      }
+    } catch (error) {
+      console.error('[v0] KCB payment completion error:', error);
+      toast.show('Error completing KCB payment', 'error');
+    }
+  }, [cart, cartTotal, products, selectedCustomer, saleType, user?.id, toast]);
+
+  /**
+   * Initiate KCB payment from checkout
+   */
+  const initiateKCBPayment = useCallback(() => {
+    if (cart.length === 0) {
+      toast.show('Cart is empty', 'error');
+      return;
+    }
+
+    // Validate stock
+    for (const item of cart) {
+      const product = products.find(p => p.id === item.product_id);
+      if (!product) continue;
+      if (product.stock < item.quantity) {
+        toast.show(`Insufficient stock for ${item.product_name}`, 'error');
+        return;
+      }
+    }
+
+    if (!kcbConfigured) {
+      toast.show('KCB is not configured. Please configure it in settings.', 'error');
+      return;
+    }
+
+    setShowKCBModal(true);
+  }, [cart, products, kcbConfigured, toast]);
+
   return (
     <div className="grid grid-cols-3 gap-6 h-full">
       {/* Product Grid */}
@@ -875,21 +956,11 @@ export function POSTerminal() {
                       <span className="text-blue-400/70 text-xs ml-auto">No real money moves</span>
                     </div>
                   )}
-                  {kcbStatus === 'idle' && (
-                    <>
-                      {!kcbConfigured && (
-                        <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
-                          <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-amber-300 text-sm font-medium">KCB BUNI not ready</p>
-                            <p className="text-amber-400/80 text-xs mt-0.5">
-                              {!kcbEnabled
-                                ? 'Enable KCB BUNI in Settings › Payments'
-                                : 'Add Client ID & Secret in Settings › Payments'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+
+                  {/* New KCB Payment Modal Button */}
+                  {!kcbConfigured && (
+                    <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
+                      <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
@@ -915,16 +986,17 @@ export function POSTerminal() {
                           <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254700000000 • PIN: any 4 digits</p>
                         )}
                       </div>
-                      <button
-                        onClick={handleMpesaPayment}
-                        disabled={!kcbConfigured || !kcbPhone || kcbPhone.length < 9}
-                        className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        <Smartphone size={20} />
-                        Send Payment Request
-                      </button>
-                    </>
+                    </div>
                   )}
+
+                  <button
+                    onClick={initiateKCBPayment}
+                    disabled={!kcbConfigured || cart.length === 0}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50 text-white rounded-lg font-bold transition flex items-center justify-center gap-2"
+                  >
+                    <Smartphone size={20} />
+                    {cart.length === 0 ? 'Add items to cart' : `Charge KES ${cartTotal.toLocaleString()} via KCB`}
+                  </button>
 
                   {(kcbStatus === 'initiating' || kcbStatus === 'waiting' || kcbStatus === 'checking') && (
                     <div className="space-y-4">
@@ -1364,6 +1436,16 @@ export function POSTerminal() {
           </div>
         </div>
       )}
+
+      {/* KCB Payment Modal */}
+      <KCBPaymentModal
+        isOpen={showKCBModal}
+        onClose={() => setShowKCBModal(false)}
+        onPaymentComplete={handleKCBPaymentComplete}
+        amount={cartTotal}
+        invoiceNumber={`INV-${Date.now()}`}
+        description={`Sale - ${cart.length} items`}
+      />
     </div>
   );
 }

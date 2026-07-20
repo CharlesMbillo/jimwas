@@ -1791,3 +1791,403 @@ export async function clearRestorePoint(): Promise<void> {
     console.error('[v0] Failed to clear restore point:', error);
   }
 }
+
+// ============================================================================
+// KCB BUNI PAYMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * KCB Payment Transaction Record Type
+ */
+export interface KCBPaymentTransaction {
+  id: string;
+  message_id: string;
+  correlation_id: string;
+  phone_number: string;
+  amount: number;
+  invoice_number: string;
+  description?: string;
+  merchant_name?: string;
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'insufficient_balance';
+  kcb_status_code?: string;
+  kcb_error_code?: string;
+  kcb_error_message?: string;
+  mpesa_receipt_number?: string;
+  mpesa_request_id?: string;
+  mpesa_response_code?: string;
+  mpesa_response_description?: string;
+  mpesa_transaction_timestamp?: string;
+  ipn_received: boolean;
+  ipn_payload?: Record<string, unknown>;
+  ipn_signature_valid?: boolean;
+  ipn_received_at?: string;
+  request_payload?: Record<string, unknown>;
+  retry_count: number;
+  last_retry_at?: string;
+  should_poll: boolean;
+  store_id?: string;
+  cashier_id?: string;
+  sale_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Save or update a KCB payment transaction
+ */
+export async function saveKCBPaymentTransaction(
+  transaction: Omit<KCBPaymentTransaction, 'created_at' | 'updated_at'>
+): Promise<KCBPaymentTransaction> {
+  try {
+    const supabase = await getSupabase();
+
+    const now = new Date().toISOString();
+    const record = {
+      ...transaction,
+      created_at: transaction.created_at || now,
+      updated_at: now,
+    };
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .upsert(record, { onConflict: 'id' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[v0] Failed to save KCB payment transaction:', error);
+      throw new Error(`Failed to save KCB transaction: ${error.message}`);
+    }
+
+    return data as KCBPaymentTransaction;
+  } catch (error) {
+    console.error('[v0] Error in saveKCBPaymentTransaction:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get a KCB payment transaction by ID
+ */
+export async function getKCBPaymentTransaction(id: string): Promise<KCBPaymentTransaction | undefined> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = no rows found, which is okay
+      console.error('[v0] Failed to get KCB payment transaction:', error);
+      throw error;
+    }
+
+    return data as KCBPaymentTransaction | undefined;
+  } catch (error) {
+    console.error('[v0] Error in getKCBPaymentTransaction:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Get KCB payment transaction by message ID (KCB's unique identifier)
+ */
+export async function getKCBPaymentByMessageId(messageId: string): Promise<KCBPaymentTransaction | undefined> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .select('*')
+      .eq('message_id', messageId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[v0] Failed to get KCB payment by message ID:', error);
+      throw error;
+    }
+
+    return data as KCBPaymentTransaction | undefined;
+  } catch (error) {
+    console.error('[v0] Error in getKCBPaymentByMessageId:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Get all KCB transactions that need status polling
+ */
+export async function getKCBPendingTransactions(): Promise<KCBPaymentTransaction[]> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .select('*')
+      .eq('should_poll', true)
+      .in('status', ['pending', 'processing'])
+      .gt('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[v0] Failed to get pending KCB transactions:', error);
+      return [];
+    }
+
+    return data as KCBPaymentTransaction[];
+  } catch (error) {
+    console.error('[v0] Error in getKCBPendingTransactions:', error);
+    return [];
+  }
+}
+
+
+
+/**
+ * Get all KCB transactions from Supabase (for transaction history)
+ */
+export async function getAllKCBTransactions(limit: number = 200): Promise<KCBPaymentTransaction[]> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('[v0] Failed to get all KCB payments:', error);
+      return [];
+    }
+
+    return data as KCBPaymentTransaction[];
+  } catch (error) {
+    console.error('[v0] Error in getAllKCBPayments:', error);
+    return [];
+  }
+}
+
+/**
+ * Update KCB transaction status
+ */
+export async function updateKCBTransactionStatus(
+  transactionId: string,
+  status: KCBPaymentTransaction['status'],
+  updates?: Partial<KCBPaymentTransaction>
+): Promise<void> {
+  try {
+    const supabase = await getSupabase();
+
+    const { error } = await supabase
+      .from('kcb_payment_transactions')
+      .update({
+        status,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', transactionId);
+
+    if (error) {
+      console.error('[v0] Failed to update KCB transaction status:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('[v0] Error in updateKCBTransactionStatus:', error);
+    throw error;
+  }
+}
+
+/**
+ * Mark KCB transaction as complete (stop polling)
+ */
+export async function markKCBTransactionComplete(transactionId: string): Promise<void> {
+  try {
+    const supabase = await getSupabase();
+
+    const { error } = await supabase
+      .from('kcb_payment_transactions')
+      .update({
+        should_poll: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', transactionId);
+
+    if (error) {
+      console.error('[v0] Failed to mark KCB transaction complete:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('[v0] Error in markKCBTransactionComplete:', error);
+    throw error;
+  }
+}
+
+/**
+ * KCB Callback Record Type
+ */
+export interface KCBPaymentCallback {
+  id: string;
+  transaction_id: string;
+  message_id?: string;
+  callback_type: 'ipn' | 'status_query' | 'other';
+  payload: Record<string, unknown>;
+  headers?: Record<string, unknown>;
+  source_ip?: string;
+  signature?: string;
+  signature_valid?: boolean;
+  verification_error?: string;
+  processed: boolean;
+  processed_at?: string;
+  processing_result?: 'success' | 'failed' | 'error';
+  processing_error?: string;
+  created_at: string;
+}
+
+/**
+ * Save a KCB callback record
+ */
+export async function saveKCBCallback(callback: Omit<KCBPaymentCallback, 'id' | 'created_at'>): Promise<KCBPaymentCallback> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_callbacks')
+      .insert([callback])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[v0] Failed to save KCB callback:', error);
+      throw error;
+    }
+
+    return data as KCBPaymentCallback;
+  } catch (error) {
+    console.error('[v0] Error in saveKCBCallback:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get unprocessed KCB callbacks
+ */
+export async function getUnprocessedKCBCallbacks(): Promise<KCBPaymentCallback[]> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_callbacks')
+      .select('*')
+      .eq('processed', false)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[v0] Failed to get unprocessed callbacks:', error);
+      return [];
+    }
+
+    return data as KCBPaymentCallback[];
+  } catch (error) {
+    console.error('[v0] Error in getUnprocessedKCBCallbacks:', error);
+    return [];
+  }
+}
+
+/**
+ * Mark KCB callback as processed
+ */
+export async function markKCBCallbackProcessed(
+  callbackId: string,
+  result: 'success' | 'failed' | 'error',
+  error?: string
+): Promise<void> {
+  try {
+    const supabase = await getSupabase();
+
+    const { error: updateError } = await supabase
+      .from('kcb_payment_callbacks')
+      .update({
+        processed: true,
+        processed_at: new Date().toISOString(),
+        processing_result: result,
+        processing_error: error || null,
+      })
+      .eq('id', callbackId);
+
+    if (updateError) {
+      console.error('[v0] Failed to mark callback processed:', updateError);
+      throw updateError;
+    }
+  } catch (error) {
+    console.error('[v0] Error in markKCBCallbackProcessed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get KCB payment summary stats
+ */
+export async function getKCBPaymentStats(): Promise<{
+  total_pending: number;
+  total_success: number;
+  total_failed: number;
+  total_amount_pending: number;
+  total_amount_success: number;
+}> {
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase
+      .from('kcb_payment_transactions')
+      .select('status, amount')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    if (error) {
+      console.error('[v0] Failed to get KCB stats:', error);
+      return {
+        total_pending: 0,
+        total_success: 0,
+        total_failed: 0,
+        total_amount_pending: 0,
+        total_amount_success: 0,
+      };
+    }
+
+    const stats = {
+      total_pending: 0,
+      total_success: 0,
+      total_failed: 0,
+      total_amount_pending: 0,
+      total_amount_success: 0,
+    };
+
+    for (const record of data) {
+      if (record.status === 'pending' || record.status === 'processing') {
+        stats.total_pending++;
+        stats.total_amount_pending += record.amount || 0;
+      } else if (record.status === 'success') {
+        stats.total_success++;
+        stats.total_amount_success += record.amount || 0;
+      } else if (record.status === 'failed') {
+        stats.total_failed++;
+      }
+    }
+
+    return stats;
+  } catch (error) {
+    console.error('[v0] Error in getKCBPaymentStats:', error);
+    return {
+      total_pending: 0,
+      total_success: 0,
+      total_failed: 0,
+      total_amount_pending: 0,
+      total_amount_success: 0,
+    };
+  }
+}
