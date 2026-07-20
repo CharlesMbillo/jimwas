@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, AlertTriangle, Loader2 } from 'lucide-react';
-import { createApprovalRequest } from '../lib/approvals';
+import { requestVoidSale } from '../lib/approvals';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
 import type { Transaction } from '../lib/types';
@@ -28,19 +28,17 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
 
     setIsLoading(true);
     try {
-      const result = await createApprovalRequest({
-        requestType: 'SALE_VOID',
-        entityType: 'transaction',
-        entityId: transaction.id,
-        requestData: {
-          transaction_id: transaction.id,
-          amount: transaction.total_amount,
+      const result = await requestVoidSale(
+        transaction.id,
+        {
+          total_amount: transaction.total_amount,
           payment_method: transaction.payment_method,
-          original_timestamp: transaction.created_at,
+          created_at: transaction.created_at,
+          items: transaction.items,
         },
-        reason: reason,
-        userId: user.id,
-      });
+        reason.trim(),
+        user.id
+      );
 
       if (result.success) {
         toast.show('Void request submitted for approval', 'success');
@@ -72,7 +70,7 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
             className="p-1 hover:bg-red-900/30 rounded-lg transition"
             disabled={isLoading}
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
@@ -82,7 +80,7 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
           <div className="bg-slate-700/50 rounded-lg p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-400">Transaction ID:</span>
-              <span className="font-mono text-white">{transaction.id}</span>
+              <span className="font-mono text-white text-xs">{transaction.id}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Amount:</span>
@@ -96,16 +94,20 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
               <span className="text-slate-400">Time:</span>
               <span className="text-white">{new Date(transaction.created_at).toLocaleString()}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Items:</span>
+              <span className="text-white">{transaction.items?.length ?? 0} item(s)</span>
+            </div>
           </div>
 
           {/* Warning Message */}
           <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 text-sm text-red-300">
-            <p>This action will:</p>
-            <ul className="list-disc list-inside mt-2 space-y-1 text-red-300/90">
-              <li>Reverse the transaction in the system</li>
+            <p className="font-medium mb-1">This void request will:</p>
+            <ul className="list-disc list-inside space-y-1 text-red-300/90">
+              <li>Require manager or admin approval</li>
+              <li>Reverse the transaction upon approval</li>
               <li>Restore inventory levels</li>
-              <li>Refund customer loyalty points if applicable</li>
-              <li>Require manager/admin approval</li>
+              <li>Reverse loyalty points if applicable</li>
               <li>Be logged in the audit trail</li>
             </ul>
           </div>
