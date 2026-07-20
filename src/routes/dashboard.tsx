@@ -1,20 +1,32 @@
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, DollarSign, ShoppingCart, Users, CreditCard, Star, Calendar } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingCart, Users, CreditCard, Star, Calendar, Trash2 } from 'lucide-react';
 import { getAllTransactions, getAllCustomers, getAllInstallmentPlans, getAllProducts } from '../lib/db';
 import { getTodaySummary, getWeekSummary, getMonthSummary, formatCurrency } from '../lib/ledger';
 import { MpesaDashboardWidget } from '../components/MpesaDashboardWidget';
+import { VoidTransactionModal } from '../components/VoidTransactionModal';
+import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../lib/permissions';
 import type { Transaction, Customer, InstallmentPlan, Product } from '../lib/types';
 
 export function DashboardPage() {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [installmentPlans, setInstallmentPlans] = useState<InstallmentPlan[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('today');
+  const [canVoid, setCanVoid] = useState(false);
+  const [voidTransaction, setVoidTransaction] = useState<Transaction | null>(null);
+  const [showVoidModal, setShowVoidModal] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    hasPermission(user.id, 'sales.void').then(setCanVoid);
+  }, [user]);
 
   const loadData = async () => {
     const [txData, custData, planData, prodData] = await Promise.all([
@@ -55,6 +67,16 @@ export function DashboardPage() {
       const txDate = new Date(tx.created_at);
       return txDate >= dateRange.start && txDate <= dateRange.end;
     });
+  }, [transactions, dateRange]);
+
+  const recentTransactionsAll = useMemo(() => {
+    return [...transactions]
+      .filter((tx) => {
+        const txDate = new Date(tx.created_at);
+        return txDate >= dateRange.start && txDate <= dateRange.end;
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 10);
   }, [transactions, dateRange]);
 
   const stats = useMemo(() => {
@@ -100,11 +122,7 @@ export function DashboardPage() {
       .slice(0, 5);
   }, [filteredTransactions]);
 
-  const recentTransactions = useMemo(() => {
-    return [...filteredTransactions]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 10);
-  }, [filteredTransactions]);
+  const recentTransactions = recentTransactionsAll;
 
   const salesByDay = useMemo(() => {
     const dayStats: Record<string, { date: string; revenue: number; count: number }> = {};
@@ -309,13 +327,16 @@ export function DashboardPage() {
                   <th className="pb-2">Items</th>
                   <th className="pb-2 text-right">Amount</th>
                   <th className="pb-2 text-right">Payment</th>
+                  <th className="pb-2 text-right">Status</th>
+                  {canVoid && <th className="pb-2 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
                 {recentTransactions.map((tx) => {
                   const customer = customers.find((c) => c.id === tx.customer_id);
+                  const isVoided = tx.status === 'voided';
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-700/50">
+                    <tr key={tx.id} className={`hover:bg-slate-700/50 ${isVoided ? 'opacity-50' : ''}`}>
                       <td className="py-3 text-sm text-slate-400">
                         {new Date(tx.created_at).toLocaleDateString()}
                       </td>
@@ -329,6 +350,33 @@ export function DashboardPage() {
                           {tx.payment_method}
                         </span>
                       </td>
+                      <td className="py-3 text-right">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          isVoided
+                            ? 'bg-red-900/30 text-red-400'
+                            : tx.status === 'completed'
+                            ? 'bg-emerald-900/30 text-emerald-400'
+                            : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {tx.status}
+                        </span>
+                      </td>
+                      {canVoid && (
+                        <td className="py-3 text-right">
+                          {tx.status === 'completed' && (
+                            <button
+                              onClick={() => {
+                                setVoidTransaction(tx);
+                                setShowVoidModal(true);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded transition"
+                              title="Request void"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -339,6 +387,20 @@ export function DashboardPage() {
           <p className="text-center text-slate-400 py-8">No transactions for this period</p>
         )}
       </div>
+
+      <VoidTransactionModal
+        transaction={voidTransaction}
+        isOpen={showVoidModal}
+        onClose={() => {
+          setShowVoidModal(false);
+          setVoidTransaction(null);
+        }}
+        onVoidComplete={() => {
+          setShowVoidModal(false);
+          setVoidTransaction(null);
+          loadData();
+        }}
+      />
 
       {/* Inventory Alerts */}
       <div className="bg-slate-800 rounded-xl p-4">
