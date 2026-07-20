@@ -1,6 +1,6 @@
 // Approval Workflow Engine - Handle approval requests for high-risk actions
 
-import { generateId, saveApprovalRequest, getApprovalRequest, getAllApprovalRequests, getApprovalRequestsByStatus, getApprovalRequestsByRequester, saveApprovalHistory, saveVoidRequest, getVoidRequest, saveRefundRequest, getRefundRequest, getVoidRequestsByStatus, getRefundRequestsByStatus } from './db';
+import { generateId, saveApprovalRequest, getApprovalRequest, getAllApprovalRequests, getApprovalRequestsByStatus, getApprovalRequestsByRequester, saveApprovalHistory, saveVoidRequest, getVoidRequest, getVoidRequestByTransaction, saveRefundRequest, getRefundRequest, getVoidRequestsByStatus } from './db';
 import { getCurrentUser } from './auth';
 import { canPerformWithoutApproval } from './permissions';
 import { logApprovalRequested, logApprovalApproved, logApprovalRejected, logSaleVoided, logSaleRefunded } from './audit';
@@ -456,16 +456,16 @@ async function executeStockAdjustment(request: ApprovalRequest, data: Record<str
   });
 }
 
-// Helper to get void request by transaction ID
+// Helper to get void request by transaction ID (searches all statuses)
 async function getVoidRequestByTransactionId(transactionId: string) {
-  const requests = await getVoidRequestsByStatus('pending');
-  return requests.find(r => r.transaction_id === transactionId);
+  return getVoidRequestByTransaction(transactionId);
 }
 
-// Helper to get refund request by transaction ID
+// Helper to get refund request by transaction ID (searches all statuses)
 async function getRefundRequestByTransactionId(transactionId: string) {
-  const requests = await getRefundRequestsByStatus('pending');
-  return requests.find(r => r.transaction_id === transactionId);
+  const { getAllRefundRequests } = await import('./db');
+  const all = await getAllRefundRequests();
+  return all.find(r => r.transaction_id === transactionId);
 }
 
 // Get pending approvals for a user (based on their role)

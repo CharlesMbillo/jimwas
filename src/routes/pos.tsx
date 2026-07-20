@@ -918,7 +918,7 @@ export function POSTerminal() {
                     { id: 'kcb', icon: Smartphone, label: 'KCB STK' },
                   ].map(({ id, icon: Icon, label }) => {
                     const isLocked = kcbStatus === 'waiting' || kcbStatus === 'initiating';
-                    const isMpesaUnconfigured = id === 'kcb' && !kcbConfigured;
+                    const isKcbUnconfigured = id === 'kcb' && !kcbConfigured;
                     return (
                       <button
                         key={id}
@@ -930,11 +930,11 @@ export function POSTerminal() {
                             : 'border-slate-600 hover:border-slate-500'
                         } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        <Icon size={24} className={paymentMethod === id ? 'text-emerald-400' : isMpesaUnconfigured ? 'text-slate-500' : 'text-slate-400'} />
-                        <span className={`text-sm ${paymentMethod === id ? 'text-white' : isMpesaUnconfigured ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <Icon size={24} className={paymentMethod === id ? 'text-emerald-400' : isKcbUnconfigured ? 'text-slate-500' : 'text-slate-400'} />
+                        <span className={`text-sm ${paymentMethod === id ? 'text-white' : isKcbUnconfigured ? 'text-slate-500' : 'text-slate-400'}`}>
                           {label}
                         </span>
-                        {isMpesaUnconfigured && (
+                        {isKcbUnconfigured && (
                           <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[9px] font-bold px-1 rounded">
                             {!kcbEnabled ? 'OFF' : 'KEY'}
                           </span>
@@ -962,12 +962,29 @@ export function POSTerminal() {
                     <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
                       <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-amber-300 text-sm font-medium">KCB BUNI not ready</p>
-                        <p className="text-amber-400/80 text-xs mt-0.5">
-                          {!kcbEnabled
-                            ? 'Enable KCB BUNI in Settings › Payments'
-                            : 'Add Client ID & Secret in Settings › Payments'}
-                        </p>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm text-slate-400">Phone Number (STK Push)</label>
+                          {kcbEnvironment === 'sandbox' && (
+                            <button
+                              type="button"
+                              onClick={() => setKCBPhone('254700000000')}
+                              className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+                            >
+                              <Zap size={11} />
+                              Use test number
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="tel"
+                          value={kcbPhone}
+                          onChange={(e) => setKCBPhone(e.target.value)}
+                          placeholder={kcbEnvironment === 'sandbox' ? '254700000000 (test)' : '07XX XXX XXX'}
+                          className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:border-emerald-500 focus:outline-none text-lg"
+                        />
+                        {kcbEnvironment === 'sandbox' && (
+                          <p className="text-xs text-blue-400/70 mt-1">Sandbox test number: 254700000000 • PIN: any 4 digits</p>
+                        )}
                       </div>
                     </div>
                   )}
