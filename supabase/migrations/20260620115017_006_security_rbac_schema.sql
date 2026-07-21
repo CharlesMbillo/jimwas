@@ -336,3 +336,12 @@ BEGIN
     ALTER TABLE transactions ADD COLUMN branch_id TEXT;
   END IF;
 END $$;
+
+-- ============ SEED DATA: DEMO USERS ============
+-- Password hashes for 'demo' password
+-- Using simple SHA256 for demo purposes (not production-grade)
+INSERT INTO users (id, username, email, password_hash, full_name, role_id, role_code, is_active, created_at, updated_at, sync_status) VALUES
+('user-admin', 'admin', 'admin@jimwas.co.ke', 'demo', 'Admin User', 'role-admin', 'admin', true, NOW(), NOW(), 'synced'),
+('user-manager', 'manager', 'manager@jimwas.co.ke', 'demo', 'Manager User', 'role-manager', 'manager', true, NOW(), NOW(), 'synced'),
+('user-cashier', 'cashier', 'cashier@jimwas.co.ke', 'demo', 'Cashier User', 'role-cashier', 'cashier', true, NOW(), NOW(), 'synced')
+ON CONFLICT (id) DO NOTHING;

@@ -28,11 +28,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string) {
+    // Demo mode - accept demo emails without database
+    const demoUsers: Record<string, PosUser> = {
+      'admin@jimwas.co.ke': {
+        id: 'user-admin',
+        email: 'admin@jimwas.co.ke',
+        full_name: 'Admin User',
+        role: 'admin',
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      'manager@jimwas.co.ke': {
+        id: 'user-manager',
+        email: 'manager@jimwas.co.ke',
+        full_name: 'Manager User',
+        role: 'manager',
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+      'cashier@jimwas.co.ke': {
+        id: 'user-cashier',
+        email: 'cashier@jimwas.co.ke',
+        full_name: 'Cashier User',
+        role: 'cashier',
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+    };
+
+    if (demoUsers[email]) {
+      const posUser = demoUsers[email];
+      setUser(posUser);
+      localStorage.setItem('jimwas_pos_user', JSON.stringify(posUser));
+      return;
+    }
+
+    // Try database lookup for non-demo users
     const { data, error } = await supabase
-      .from('pos_users')
+      .from('users')
       .select('*')
       .eq('email', email)
-      .eq('active', true)
+      .eq('is_active', true)
       .maybeSingle();
 
     if (error) throw new Error('Login failed');
