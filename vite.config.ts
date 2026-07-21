@@ -6,6 +6,6 @@ export default defineConfig({
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   server: {
     port: 3000,
-    allowedHosts: ['sb-1lnae3b2b6xa.vercel.run'],
+    allowedHosts: ['.vercel.run'],
   },
 })
