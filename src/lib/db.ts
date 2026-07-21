@@ -1182,43 +1182,39 @@ export async function saveKCBSettings(settings: KCBSettings): Promise<KCBSetting
       // Continue to try Supabase sync even if IDB fails
     }
 
-    // Direct upsert to Supabase — do not go through sync queue for settings
+    // Direct upsert to Supabase — do not report settings as synced unless it succeeds.
     const { getSupabase } = await import('./sync');
     const supabase = getSupabase();
-    if (supabase) {
-      try {
-        const { error } = await supabase.from('kcb_settings').upsert({
-          id: safeSettings.id,
-          is_enabled: safeSettings.is_enabled,
-          environment: safeSettings.environment,
-          client_id: safeSettings.client_id || null,
-          client_secret: safeSettings.client_secret || null,
-          org_shortcode: safeSettings.org_shortcode || null,
-          org_passkey: safeSettings.org_passkey || null,
-          passkey: safeSettings.passkey || null,
-          callback_url: safeSettings.callback_url || null,
-          timeout_url: safeSettings.timeout_url || null,
-          public_cert_path: safeSettings.public_cert_path || null,
-          default_phone_country_code: safeSettings.default_phone_country_code,
-          last_updated: safeSettings.last_updated,
-          last_updated_by: safeSettings.last_updated_by || null,
-          created_at: safeSettings.created_at,
-          updated_at: safeSettings.updated_at,
-        });
-        if (error) console.warn('[v0] Supabase sync warning for KCB settings:', error.message);
-      } catch (supabaseError) {
-        console.warn('[v0] Supabase sync error (non-critical):', supabaseError instanceof Error ? supabaseError.message : String(supabaseError));
-      }
-    }
-
-    try {
-      const synced = { ...safeSettings, sync_status: 'synced' as const };
-      await db.put('kcb_settings', synced);
-      return synced;
-    } catch (finalIdbError) {
-      console.warn('[v0] Final IndexedDB write failed, returning unsaved settings');
+    if (!supabase) {
       return safeSettings;
     }
+
+    const { error } = await supabase.from('kcb_settings').upsert({
+      id: safeSettings.id,
+      is_enabled: safeSettings.is_enabled,
+      environment: safeSettings.environment,
+      client_id: safeSettings.client_id || null,
+      client_secret: safeSettings.client_secret || null,
+      org_shortcode: safeSettings.org_shortcode || null,
+      org_passkey: safeSettings.org_passkey || null,
+      callback_url: safeSettings.callback_url || null,
+      timeout_url: safeSettings.timeout_url || null,
+      public_cert_path: safeSettings.public_cert_path || null,
+      default_phone_country_code: safeSettings.default_phone_country_code,
+      last_updated: safeSettings.last_updated,
+      last_updated_by: safeSettings.last_updated_by || null,
+      created_at: safeSettings.created_at,
+      updated_at: safeSettings.updated_at,
+      sync_status: 'synced',
+    });
+
+    if (error) {
+      throw new Error(`Failed to save KCB settings to Supabase: ${error.message}`);
+    }
+
+    const synced = { ...safeSettings, sync_status: 'synced' as const };
+    await db.put('kcb_settings', synced);
+    return synced;
   } catch (error) {
     console.error('[v0] Critical error in saveKCBSettings:', error);
     throw error;

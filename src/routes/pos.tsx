@@ -333,49 +333,22 @@ export function POSTerminal() {
     }
   };
 
-  // Sandbox only: simulate a KCB BUNI payment for testing
+  // Sandbox only: simulate a successful payment locally for checkout testing.
   const handleSimulatePayment = async () => {
-    if (kcbEnvironment !== 'sandbox') return;
+    if (kcbEnvironment !== 'sandbox' || cart.length === 0) return;
     setKCBSimulating(true);
+    setKCBError(null);
+    setKCBPhone(current => current || '254700000000');
+
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kcb-simulate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          checkoutRequestId: kcbCheckoutId || `sim-${Date.now()}`,
-          phone: kcbPhone,
-          amount: cart.reduce((s, i) => s + i.subtotal, 0),
-        }),
-      });
-
-      // Safely parse JSON response
-      let data;
-      try {
-        const text = await response.text();
-        if (!text) {
-          setKCBError('Empty response from KCB sandbox service');
-          return;
-        }
-        data = JSON.parse(text);
-      } catch (parseError) {
-        console.error('[v0] JSON parse error:', parseError);
-        setKCBError('Invalid response from KCB sandbox service');
-        return;
-      }
-
-      if (!response.ok || !data.success) {
-        setKCBError(data?.error || 'KCB sandbox simulation failed');
-        return;
-      }
-      // Directly mark as success — don't rely on polling
-      setKCBReceiptNumber(data.receiptNumber);
+      await new Promise(resolve => setTimeout(resolve, 600));
+      const receiptNumber = `SIM${Date.now().toString().slice(-8)}`;
+      setKCBReceiptNumber(receiptNumber);
       setKCBStatus('success');
       toast.show('KCB sandbox payment simulated successfully!');
-      await completeMpesaSale(data.receiptNumber);
+      await completeMpesaSale(receiptNumber);
     } catch (error) {
+      setKCBStatus('failed');
       setKCBError(error instanceof Error ? error.message : 'KCB sandbox simulation failed');
     } finally {
       setKCBSimulating(false);
@@ -963,9 +936,8 @@ export function POSTerminal() {
                     </div>
                   )}
 
-                  {/* New KCB Payment Modal Button */}
-                  {!kcbConfigured && (
-                    <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
+                  {/* STK Push phone number */}
+                  <div className="flex items-start gap-3 bg-amber-900/30 border border-amber-700 rounded-lg p-3">
                       <AlertCircle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <div className="flex items-center justify-between mb-2">
@@ -993,7 +965,6 @@ export function POSTerminal() {
                         )}
                       </div>
                     </div>
-                  )}
 
                   <button
                     onClick={initiateKCBPayment}
@@ -1003,6 +974,18 @@ export function POSTerminal() {
                     <Smartphone size={20} />
                     {cart.length === 0 ? 'Add items to cart' : `Charge KES ${cartTotal.toLocaleString()} via KCB`}
                   </button>
+
+                  {kcbEnvironment === 'sandbox' && (
+                    <button
+                      type="button"
+                      onClick={handleSimulatePayment}
+                      disabled={kcbSimulating || cart.length === 0}
+                      className="w-full py-3 bg-blue-700 hover:bg-blue-600 disabled:bg-slate-600 disabled:opacity-50 text-white rounded-lg font-bold transition flex items-center justify-center gap-2"
+                    >
+                      {kcbSimulating ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
+                      {kcbSimulating ? 'Simulating payment...' : 'Simulate successful payment'}
+                    </button>
+                  )}
 
                   {(kcbStatus === 'initiating' || kcbStatus === 'waiting' || kcbStatus === 'checking') && (
                     <div className="space-y-4">

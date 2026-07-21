@@ -67,27 +67,29 @@ export function SettingsPage() {
     loadAllSettings();
   }, []);
 
-  // Auto-save KCB settings with debounce
+  // Auto-save every edited KCB field. Saved state is written back so the effect stops.
   useEffect(() => {
     const timer = setTimeout(async () => {
-      // Only auto-save if settings have changed and are not in default state
-      if (kcbSettings.sync_status === 'pending' && (kcbSettings.client_id || kcbSettings.client_secret || kcbSettings.org_shortcode)) {
+      if (kcbSettings.sync_status === 'pending') {
         try {
           setAutoSaving(true);
-          await saveKCBSettings({
+          const saved = await saveKCBSettings({
             ...kcbSettings,
             last_updated: new Date().toISOString(),
             last_updated_by: user?.id,
             updated_at: new Date().toISOString(),
             sync_status: 'pending' as const,
           });
+          setKCBSettings(saved);
         } catch (error) {
-          console.error('[v0] Auto-save failed for KCB settings:', error);
+          const errorMsg = error instanceof Error ? error.message : 'Failed to auto-save KCB settings';
+          console.error('[v0] Auto-save failed for KCB settings:', errorMsg);
+          showMessage('error', errorMsg);
         } finally {
           setAutoSaving(false);
         }
       }
-    }, 3000); // 3 second debounce
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [kcbSettings, user?.id]);
@@ -328,7 +330,7 @@ export function SettingsPage() {
           <PaymentsTab
             kcbSettings={kcbSettings}
             paymentMethods={paymentMethods}
-            onMpesaChange={setKCBSettings}
+            onMpesaChange={(settings) => setKCBSettings({ ...settings, sync_status: 'pending' })}
             onTogglePayment={togglePaymentMethod}
             onSaveMpesa={saveMpesa}
             saving={saving}
