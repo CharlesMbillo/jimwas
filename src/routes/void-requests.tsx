@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileX, Check, X, Loader2, Clock } from 'lucide-react';
+import { FileX, Check, X, Loader as Loader2, Clock } from 'lucide-react';
 import { getAllVoidRequests } from '../lib/db';
 import { approveRequest, rejectRequest } from '../lib/approvals';
 import { useAuth } from '../context/AuthContext';

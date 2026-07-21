@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Loader2 } from 'lucide-react';
+import { Leaf, Loader as Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function LoginPage() {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, ShoppingCart, Trash2, Plus, Minus, Loader2, CheckCircle } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, Loader as Loader2, CircleCheck as CheckCircle } from 'lucide-react';
 import { getAllProducts, getAllCustomers, createTransaction } from '../lib/db';
 import { useAuth } from '../context/AuthContext';
 import type { Product, Customer, PaymentMethod, SaleType } from '../lib/types';

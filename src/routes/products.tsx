@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Loader2, Package } from 'lucide-react';
+import { Plus, Loader as Loader2, Package } from 'lucide-react';
 import { getAllProducts, createProduct, updateProduct } from '../lib/db';
 import { useAuth } from '../context/AuthContext';
 import { canManageProducts } from '../lib/permissions';

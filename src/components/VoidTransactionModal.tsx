@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, TriangleAlert as AlertTriangle, Loader as Loader2 } from 'lucide-react';
 import type { Transaction } from '../lib/types';
 import { useAuth } from '../context/AuthContext';
 import { requestVoidSale } from '../lib/approvals';

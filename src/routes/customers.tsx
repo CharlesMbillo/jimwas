@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Loader2, Users, Phone, Mail } from 'lucide-react';
+import { Plus, Loader as Loader2, Users, Phone, Mail } from 'lucide-react';
 import { getAllCustomers, createCustomer } from '../lib/db';
 import type { Customer } from '../lib/types';
 
