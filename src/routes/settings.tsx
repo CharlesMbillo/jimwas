@@ -195,10 +195,16 @@ export function SettingsPage() {
   };
 
   const togglePaymentMethod = async (method: PaymentMethodConfig) => {
-    const updated = { ...method, is_enabled: !method.is_enabled, updated_at: new Date().toISOString() };
-    await savePaymentMethod(updated);
-    setPaymentMethods(prev => prev.map(m => m.id === method.id ? updated : m));
-    showMessage('success', `${method.display_name} ${updated.is_enabled ? 'enabled' : 'disabled'}`);
+    try {
+      const updated = { ...method, is_enabled: !method.is_enabled, updated_at: new Date().toISOString() };
+      await savePaymentMethod(updated);
+      setPaymentMethods(prev => prev.map(m => m.id === method.id ? updated : m));
+      showMessage('success', `${method.display_name} ${updated.is_enabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to toggle payment method';
+      console.error('[v0] Toggle payment method error:', errorMsg);
+      showMessage('error', errorMsg);
+    }
   };
 
   const saveLoyalty = async () => {

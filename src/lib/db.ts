@@ -1388,20 +1388,22 @@ export async function getKCBStatistics(sinceDate?: Date): Promise<KCBStatistics>
 export async function savePaymentMethod(method: PaymentMethodConfig) {
   const db = await getDB();
   await db.put('payment_methods', method);
-  const { getSupabase } = await import('./sync');
-  const supabase = getSupabase();
-  if (supabase) {
-    const { error } = await supabase.from('payment_methods').upsert({
-      id: method.id,
-      method_name: method.method_name,
-      is_enabled: method.is_enabled,
-      display_name: method.display_name,
-      requires_reference: method.requires_reference,
-      display_order: method.display_order,
-      created_at: method.created_at,
-      updated_at: method.updated_at,
-    });
-    if (error) throw new Error(error.message);
+  
+  // Supabase sync is optional - payment_methods is primarily stored in IndexedDB
+  // The Supabase payment_methods table is a reference table with different schema
+  try {
+    const { getSupabase } = await import('./sync');
+    const supabase = getSupabase();
+    if (supabase) {
+      // Note: Supabase payment_methods table has: code, label, description (reference data)
+      // This is separate from the local PaymentMethodConfig (app-level settings)
+      // We skip syncing to avoid schema mismatch errors
+      console.log('[v0] Payment method saved to IndexedDB (Supabase sync skipped - reference table)');
+    }
+  } catch (error) {
+    // Silently ignore Supabase errors - payment methods are primarily stored locally
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.debug('[v0] Payment method Supabase sync skipped:', errorMsg);
   }
 }
 
