@@ -17,7 +17,7 @@ export const KCB_API_DEFAULTS = {
 } as const;
 
 export const PAYMENT_STATUS_CODES = {
-  SUCCESS: '00000000', // Successful transaction
+  SUCCESS: '0', // Per KCB API Spec v1.0 - Successful transaction
   PENDING: '1',
   INSUFFICIENT_FUNDS: '14',
   CUSTOMER_CANCELLED: '17',
