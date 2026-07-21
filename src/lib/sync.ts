@@ -1,13 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getDB, getSyncQueue, removeFromSyncQueue, addToSyncQueue, generateId } from './db';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Support both Vite (VITE_*) and Vercel (NEXT_PUBLIC_*) naming conventions
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 let _supabase: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient | null {
-  if (!supabaseUrl || !supabaseKey) return null;
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('[v0] Supabase environment variables not configured');
+    console.warn('[v0] Expected VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY)');
+    return null;
+  }
   if (!_supabase) _supabase = createClient(supabaseUrl, supabaseKey);
   return _supabase;
 }
