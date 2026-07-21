@@ -112,11 +112,14 @@ export function POSTerminal() {
 
     setKCBEnabled(kcbSettings?.is_enabled ?? false);
     setKCBEnvironment(kcbSettings?.environment ?? 'sandbox');
-    // KCB is "configured" when enabled + has client_id + client_secret (minimum to attempt)
-    // passkey is only required in production mode
+    // KCB is "configured" when enabled + has ALL required credentials:
+    // - client_id + client_secret (OAuth credentials for authentication)
+    // - org_shortcode + org_passkey (M-Pesa account details for STK Push)
     const hasCredentials = !!(kcbSettings?.is_enabled &&
       kcbSettings.client_id &&
-      kcbSettings.client_secret);
+      kcbSettings.client_secret &&
+      kcbSettings.org_shortcode &&
+      kcbSettings.org_passkey);
     setKCBConfigured(hasCredentials);
   };
 
@@ -259,7 +262,7 @@ export function POSTerminal() {
     if (!kcbConfigured) {
       setKCBStatus('failed');
       setKCBError(kcbEnabled
-        ? 'KCB BUNI API credentials not configured. Go to Settings > Payments to add Client ID, Secret, and Pass Key.'
+        ? 'KCB BUNI credentials incomplete. Go to Settings > Payments > KCB BUNI and configure: Client ID, Client Secret, M-Pesa Short Code, and M-Pesa Pass Key.'
         : 'KCB BUNI is not enabled. Go to Settings > Payments to enable it.');
       return;
     }
