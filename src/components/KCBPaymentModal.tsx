@@ -252,6 +252,64 @@ export function KCBPaymentModal({
   };
 
   /**
+   * Simulate successful payment (for testing/demo)
+   */
+  const handleSimulatePayment = async () => {
+    if (!isValidPhone(phoneNumber)) {
+      setErrorMessage('Please enter a valid phone number (e.g., 0712345678 or 254712345678)');
+      return;
+    }
+
+    setErrorMessage('');
+    setIsProcessing(true);
+
+    try {
+      const formattedPhone = formatPhoneNumber(phoneNumber);
+
+      // Create payment transaction record
+      const tx = await saveKCBPaymentTransaction({
+        id: `kcb_sim_${Date.now()}`,
+        message_id: `msg_sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        correlation_id: `corr_sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        phone_number: formattedPhone,
+        amount: Math.round(amount * 100), // Convert to cents
+        invoice_number: invoiceNumber,
+        description: description || `Invoice ${invoiceNumber}`,
+        merchant_name: 'Jimwas POS',
+        status: 'success' as const,
+        ipn_received: true,
+        retry_count: 0,
+        should_poll: false,
+        request_payload: {
+          phoneNumber: formattedPhone,
+          amount,
+          invoiceNumber,
+          description,
+        } as unknown as Record<string, unknown>,
+        mpesa_receipt_number: `SIM${Date.now().toString().slice(-8)}`,
+        mpesa_response_code: '0',
+        mpesa_response_description: 'Simulated successful transaction',
+        transaction_date: new Date().toISOString(),
+      });
+
+      setTransaction(tx);
+      setStep('success');
+      toast.show('Payment simulated successfully!', 'success');
+      
+      setTimeout(() => {
+        onPaymentComplete(tx);
+        handleClose();
+      }, 2000);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to simulate payment';
+      console.error('[v0] Simulation error:', errorMsg);
+      setErrorMessage(errorMsg);
+      setIsProcessing(false);
+      toast.show(errorMsg, 'error');
+    }
+  };
+
+  /**
    * Close modal
    */
   const handleClose = () => {
@@ -321,23 +379,43 @@ export function KCBPaymentModal({
                 </div>
               )}
 
-              <button
-                onClick={handleInitiatePayment}
-                disabled={!phoneNumber || isProcessing}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Initiating...
-                  </>
-                ) : (
-                  <>
-                    <Smartphone className="w-4 h-4" />
-                    Send STK Push
-                  </>
-                )}
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={handleInitiatePayment}
+                  disabled={!phoneNumber || isProcessing}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:opacity-50 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Initiating...
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="w-4 h-4" />
+                      Send STK Push
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleSimulatePayment}
+                  disabled={!phoneNumber || isProcessing}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:opacity-50 text-white font-medium rounded-lg transition flex items-center justify-center gap-2 text-sm"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Simulating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Simulate Payment
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

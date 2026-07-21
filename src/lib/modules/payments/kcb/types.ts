@@ -45,16 +45,18 @@ export interface STKPushResponse {
 }
 
 export interface STKPushPayload {
-  messageId: string;
+  // Per KCB M-Pesa STK Push API Specification v1.0
   phoneNumber: string;
-  amount: number;
+  amount: string;  // API spec requires string type
   invoiceNumber: string;
-  description: string;
-  correlationId: string;
-  timestamp: string;
-  merchantName: string;
-  merchantRequestId: string;
-  checkoutRequestId: string;
+  sharedShortCode: boolean;        // Mandatory per spec
+  orgShortCode: string;            // Correct field name per spec
+  orgPassKey: string;              // Correct field name per spec
+  transactionDescription: string;  // Correct field name per spec
+  callbackUrl: string;             // Mandatory per spec
+  // Response fields populated after request
+  merchantRequestId?: string;
+  checkoutRequestId?: string;
 }
 
 // ============ PAYMENT STATUS TYPES ============

@@ -37,19 +37,17 @@ export class KCBClient {
       const correlationId = generateCorrelationId();
       const timestamp = new Date().toISOString();
 
+      // Build payload per KCB M-Pesa STK Push API Specification v1.0
+      // All mandatory fields must be present: phoneNumber, amount, invoiceNumber, sharedShortCode, callbackUrl
       const payload = {
-        messageId,
         phoneNumber: request.phoneNumber,
-        amount: request.amount,
+        amount: String(request.amount),  // API spec requires string type
         invoiceNumber: request.invoiceNumber,
-        description: request.description || `Invoice ${request.invoiceNumber}`,
-        correlationId,
-        timestamp,
-        merchantName: request.merchantName || 'Jimwas POS',
-        expiryTime: request.expiryTime || KCB_API_DEFAULTS.EXPIRY_TIME,
-        routeCode: config.routeCode,
-        shortCode: config.orgShortcode,
-        passkey: config.orgPasskey,
+        sharedShortCode: config.sharedShortcode,  // Mandatory per spec
+        orgShortCode: config.orgShortcode,        // Correct field name per spec
+        orgPassKey: config.orgPasskey,            // Correct field name per spec
+        transactionDescription: request.description || `Invoice ${request.invoiceNumber}`,  // Correct field name per spec
+        callbackUrl: config.callbackUrl,          // Mandatory per spec
       };
 
       const response = await fetch(
@@ -78,7 +76,8 @@ export class KCBClient {
 
       const data: STKPushResponse = await response.json();
 
-      if (data.ResponseCode !== '00000000') {
+      // Per KCB API Spec, success code is '0' (not '00000000')
+      if (data.ResponseCode !== '0') {
         throw new KCBPaymentError(
           ErrorCode.STK_FAILED,
           data.ResponseDescription || 'STK Push request failed'
@@ -91,14 +90,14 @@ export class KCBClient {
       });
 
       return {
-        messageId,
         phoneNumber: request.phoneNumber,
-        amount: request.amount,
+        amount: String(request.amount),
         invoiceNumber: request.invoiceNumber,
-        description: request.description || '',
-        correlationId,
-        timestamp,
-        merchantName: request.merchantName || 'Jimwas POS',
+        sharedShortCode: config.sharedShortcode,
+        orgShortCode: config.orgShortcode,
+        orgPassKey: config.orgPasskey,
+        transactionDescription: request.description || `Invoice ${request.invoiceNumber}`,
+        callbackUrl: config.callbackUrl,
         merchantRequestId: data.MerchantRequestID,
         checkoutRequestId: data.CheckoutRequestID,
       };
