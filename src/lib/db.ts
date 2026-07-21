@@ -11,13 +11,18 @@ import type {
 import type { PaymentMethod, SaleType } from './types';
 
 export async function getAllProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .eq('active', true)
-    .order('name');
-  if (error) throw error;
-  return data as Product[];
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('active', true)
+      .order('name');
+    if (error) throw error;
+    return data as Product[];
+  } catch (err) {
+    console.debug('[Offline] Returning empty products list');
+    return [];
+  }
 }
 
 export async function createProduct(p: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
@@ -35,9 +40,14 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
 }
 
 export async function getAllCustomers(): Promise<Customer[]> {
-  const { data, error } = await supabase.from('customers').select('*').order('name');
-  if (error) throw error;
-  return data as Customer[];
+  try {
+    const { data, error } = await supabase.from('customers').select('*').order('name');
+    if (error) throw error;
+    return data as Customer[];
+  } catch (err) {
+    console.debug('[Offline] Returning empty customers list');
+    return [];
+  }
 }
 
 export async function createCustomer(c: Omit<Customer, 'id' | 'created_at'>): Promise<Customer> {
@@ -47,16 +57,21 @@ export async function createCustomer(c: Omit<Customer, 'id' | 'created_at'>): Pr
 }
 
 export async function getAllTransactions(): Promise<Transaction[]> {
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      *,
-      transaction_items (*),
-      customer:customers (*)
-    `)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data as unknown as Transaction[];
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        transaction_items (*),
+        customer:customers (*)
+      `)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data as unknown as Transaction[];
+  } catch (err) {
+    console.debug('[Offline] Returning empty transactions list');
+    return [];
+  }
 }
 
 export async function getTransactionById(id: string): Promise<Transaction | null> {

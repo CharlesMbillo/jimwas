@@ -96,14 +96,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
-
-export function getCurrentUserRole(): UserRole | null {
-  const stored = localStorage.getItem('jimwas_pos_user');
-  if (!stored) return null;
-  try {
-    const parsed = JSON.parse(stored) as PosUser;
-    return parsed.role;
-  } catch {
-    return null;
-  }
-}
