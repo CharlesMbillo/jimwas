@@ -30,9 +30,10 @@ function AppContent() {
     const syncTimer = setTimeout(() => {
       import('./lib/sync').then(({ syncNow }) => {
         syncNow().then((result) => {
-          console.log('Initial sync:', result.message);
+          console.log('[v0] Initial sync:', result.message);
         }).catch(err => {
-          console.error('Initial sync failed:', err);
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+          console.error('[v0] Initial sync failed:', errorMsg);
         });
       });
     }, 2000);

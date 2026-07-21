@@ -74,7 +74,8 @@ async function checkPendingCount() {
     syncState.pendingCount = queue.length;
     notifySyncState();
   } catch (error) {
-    console.error('Failed to check pending count:', error);
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[v0] Failed to check pending count:', errorMsg);
   }
 }
 
@@ -102,7 +103,8 @@ async function triggerSync() {
         await removeFromSyncQueue(item.id);
         successCount++;
       } catch (error) {
-        console.error('Sync failed for item:', item.id, item.table_name, item.operation, error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[v0] Sync failed for item:', item.id, item.table_name, item.operation, errorMsg);
         // Remove items older than 24h that keep failing — they're likely stale
         const age = Date.now() - new Date(item.created_at).getTime();
         if (age > 24 * 60 * 60 * 1000) {
@@ -117,8 +119,9 @@ async function triggerSync() {
     try {
       await syncFromRemote();
     } catch (remoteError) {
-      console.error('Remote sync failed:', remoteError);
-      syncState.error = remoteError instanceof Error ? remoteError.message : 'Remote sync failed';
+      const errorMsg = remoteError instanceof Error ? remoteError.message : 'Remote sync failed';
+      console.error('[v0] Remote sync failed:', errorMsg);
+      syncState.error = errorMsg;
     }
 
     syncState.status = 'synced';
@@ -129,9 +132,10 @@ async function triggerSync() {
       syncState.error = `${failCount} items failed to sync`;
     }
   } catch (error) {
-    console.error('Sync error:', error);
+    const errorMsg = error instanceof Error ? error.message : 'Sync failed';
+    console.error('[v0] Sync error:', errorMsg);
     syncState.status = 'error';
-    syncState.error = error instanceof Error ? error.message : 'Sync failed';
+    syncState.error = errorMsg;
   } finally {
     isSyncing = false;
     notifySyncState();
