@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   server: {
     port: 3000,
     allowedHosts: ['sb-1lnae3b2b6xa.vercel.run'],
