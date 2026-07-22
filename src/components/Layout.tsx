@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Users, FileX, LogOut, Leaf } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, FileX, Settings, LogOut, Leaf } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canApproveVoid } from '../lib/permissions';
 import type { ReactNode } from 'react';
@@ -21,6 +21,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: '/products', label: 'Products', icon: <Package size={18} />, show: true },
     { to: '/customers', label: 'Customers', icon: <Users size={18} />, show: true },
     { to: '/void-requests', label: 'Void Requests', icon: <FileX size={18} />, show: canApproveVoid(user?.role ?? 'cashier') },
+    { to: '/settings', label: 'Settings', icon: <Settings size={18} />, show: user?.role === 'admin' },
   ];
 
   const handleLogout = () => {
