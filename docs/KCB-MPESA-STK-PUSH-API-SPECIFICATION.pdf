@@ -1,0 +1,342 @@
+
+
+ 
+1 
+ 
+KCB	MPESA	STK	PUSH	API	SPECIFICATION	DOCUMENT	
+Version	1.0	
+Introduction	
+This	Interface	speci/ication	document	describes	the	integration	points	between	a	third-
+party	system	and	the	KCB	API	Gateway,	for	the	Mpesa	Express/STK	Push	service	via	KCB	
+Bank’s	paybill	522533.	
+Prerequisites	
+The	developer/third	party	needs	to	register	on	the	API	gateway	accessible	on	the	
+below	link.		
+https://sandbox.buni.kcbgroup.com/devportal/apis	
+Guide	on	how	to	get	started	in	consuming	our	APIs	is	available	on	the	following	link	
+https://buni.kcbgroup.com/getting-started	
+Authentication Token 
+Use the below curl to generate the token 
+curl --location 'https://uat.buni.kcbgroup.com/token?grant_type=client_credentials' \ 
+--header 'Content-Type: application/x-www-form-urlencoded' \ 
+--header 'Authorization: Basic 
+OOE5NaF9qMWZJeE9seWZhZjQ0NzYTpoYnRZdGQzZTFfX0E3elBHb2ZvY1pKRk5scUFh' \ 
+--data-urlencode 'grant_type=client_credentials' 
+Mpesa	Express	Service	
+REQUEST			
+Transport	Protocol		HTTPS		
+Message	Format		JSON		
+Interaction	Type		Asynchronous		
+Method	POST		
+	
+	
+	
+	
+
+ 
+2 
+ 
+Request	Parameter Definition	
+REQUEST	PAYLOAD				
+Name		Type		Presence		Description		
+phoneNumber		String(20)		Mandatory		The	mobile	number	to	which	the	STK	Pin	Prompt	
+should	be	sent.		
+amount		String(30)		Mandatory		This	is	the	amount	to	be	transferred.			
+invoiceNumber		String(30)		Mandatory		Unique	code	assigned	to	each	invoice.	Format:	
+KCBTILLNO-YOURACCREF		
+sharedShortCode		Boolean		Mandatory		This	is	KCB’S	short-code	(Paybill	or	Till)	used	to	
+receive	the	transaction.		
+If	provided	value	should	be	set	to	true.		
+orgShortCode		String(30)		Optional		This	is	the	organisation’s	short-code	used	to	
+identify	an	organisation	and	receive	the	transaction	
+orgPassKey		String(30)		Optional	Unique	pass	key	for	the	organization.		
+transactionDescription		String(30)		Optional		This	is	any	additional	information	about	the	
+payment		
+callbackUrl		String(50)		Mandatory		Endpoint	to	which	the	M-Pesa	API	will	send	the	
+results.	Must	be	a	secure	URL	
+ 
+Sample Request 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Response Parameter Definition 
+RESPONSE	PAYLOAD				
+Name		Type		Presence		Description		
+header				Mandatory				
+statusCode		String(30)		Mandatory		Unique	code	that	indicates	whether	the	request	
+successfully	processed	or	not		
+statusDescription		String(30)		Mandatory		Provides	additional	information	about	the	status	
+of	the	transaction.		
+response								
+MerchantRequestID		String(30)		Mandatory		Uniquely	identiVies	the	merchant	request				
+{ 
+    "phoneNumber": "254700123456", 
+    "amount": "1", 
+    "invoiceNumber": "KCBTILLNO-YOURACCREF", 
+    "sharedShortCode": true, 
+    "orgShortCode": "", 
+    "orgPassKey": "", 
+    "callbackUrl": "https://posthere.io/f613-4b7f-b82b", 
+    "transactionDescription": "school fee payment" 
+} 
+ 
+
+ 
+3 
+ 
+ResponseCode		String(30)		Mandatory		Unique	code	that	identiVies	the	status	of	the	
+transaction.			
+CustomerMessage		String(30)		Mandatory		Information	that	describes	the	status	of	the	
+transaction.		
+CheckoutRequestID		String(10)		Boolean		Either	true	or	false		
+ResponseDescription		String(30)		Mandatory		Provides	additional	information	about	the	
+response	code.		
+ 
+Sample Success Response 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Sample Success Result 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+{ 
+    "response": { 
+        "MerchantRequestID": "7432-920544-1", 
+        "ResponseCode": "0", 
+        "CustomerMessage": "Success. Request accepted for processing", 
+        "CheckoutRequestID": false, 
+        "ResponseDescription": "Success. Request accepted for processing" 
+    }, 
+    "header": { 
+        "statusDescription": "Success. Request accepted for processing", 
+        "statusCode": "0" 
+    } 
+} 
+ 
+{ 
+    "Body": { 
+        "stkCallback": { 
+            "MerchantRequestID": "17684-56147665-1", 
+            "CheckoutRequestID": "ws_CO_21072023153404650713165445", 
+            "ResultCode": 0, 
+            "ResultDesc": "The service request is processed successfully.", 
+            "CallbackMetadata": { 
+                "Item": [ 
+                    { 
+                        "Name": "Amount", 
+                        "Value": 1.00 
+                    }, 
+                    { 
+                        "Name": "MpesaReceiptNumber", 
+                        "Value": "ABCDE12345" 
+                    }, 
+                    { 
+                        "Name": "Balance" 
+                    }, 
+                    { 
+                        "Name": "TransactionDate", 
+                        "Value": 20230721153232 
+                    }, 
+                    { 
+                        "Name": "PhoneNumber", 
+                        "Value": 254700000000 
+                    } 
+                ] 
+            } 
+        } 
+    } 
+} 
+ 
+
+ 
+4 
+ 
+Possible	Responses	
+Response  
+Description  
+{ 
+    "fault": { 
+        "code": 900901, 
+        "message": "Invalid Credentials", 
+        "description": "Invalid Credentials. Make sure you have given the 
+correct access token" 
+    } 
+} 
+Invalid token provided 
+{   
+   "fault": {   
+        "code": 900902,   
+        "message": "Missing Credentials",   
+        "description": "Missing Credentials. Make sure your  
+API request provides required credentials"   
+    }   
+} 
+Unauthorized request. 
+Ensure to use consumer 
+key and consumer secret 
+issued on the onboarding 
+process  
+{ 
+    "response": {}, 
+    "header": { 
+        "statusDescription": "STK Push Backend Posting Failure: Bad 
+Request - Invalid Remarks", 
+        "statusCode": "1" 
+    } 
+} 
+Invalid/bad request, some 
+parameters missing 
+{ 
+    "response": { 
+        "MerchantRequestID": "6e86-45dd-91ac-fd5d4178ab523719410", 
+        "ResponseCode": "0", 
+        "CustomerMessage": "Success. Request accepted for processing", 
+        "CheckoutRequestID": "ws_CO_15072024173658536713165445", 
+        "ResponseDescription": "Success. Request accepted for processing" 
+    }, 
+    "header": { 
+        "statusDescription": "Success. Request accepted for processing", 
+        "statusCode": "0" 
+    } 
+} 
+Successful call. Your 
+request is being processed. 
+You will receive the 
+outcome on the Callback 
+URL specified on the 
+request 
+	
+Possible	Callback	Payload	
+Response  
+Description  
+{ 
+    "Body": { 
+        "stkCallback": { 
+            "MerchantRequestID": "17684-56147665-1", 
+            "CheckoutRequestID": "ws_CO_21072023153404650713165445", 
+            "ResultCode": 0, 
+            "ResultDesc": "The service request is processed 
+successfully.", 
+            "CallbackMetadata": { 
+                "Item": [ 
+                    { 
+                        "Name": "Amount", 
+                        "Value": 1.00 
+                    }, 
+                    { 
+                        "Name": "MpesaReceiptNumber", 
+                        "Value": "ABCDE12345" 
+                    }, 
+                    { 
+                        "Name": "Balance" 
+                    }, 
+                    { 
+                        "Name": "TransactionDate", 
+                        "Value": 20230721153232 
+                    }, 
+                    { 
+                        "Name": "PhoneNumber", 
+                        "Value": 254700000000 
+Transaction completed 
+successfully 
+
+ 
+5 
+ 
+                    } 
+                ] 
+            } 
+        } 
+    } 
+} 
+{ 
+  "Body": { 
+    "stkCallback": { 
+      "MerchantRequestID": "2654-4b64-97ff-b827b542881d115431", 
+      "CheckoutRequestID": "ws_CO_15072024174048266700000000", 
+      "ResultCode": 1037, 
+      "ResultDesc": "DS timeout user cannot be reached" 
+    } 
+  } 
+} 
+Target user not reachable  
+{ 
+  "Body": { 
+    "stkCallback": { 
+      "MerchantRequestID": "b700-4256-996a-f067e387d4b7262116", 
+      "CheckoutRequestID": "ws_CO_15072024180047946713165445", 
+      "ResultCode": 2001, 
+      "ResultDesc": "The initiator information is invalid." 
+    } 
+  } 
+} 
+Target user provided an 
+incorrect pin 
+{ 
+  "Body": { 
+    "stkCallback": { 
+      "MerchantRequestID": "db57-40e1-af85-2424fab5a2e6380453232", 
+      "CheckoutRequestID": "ws_CO_15072024180155736713165445", 
+      "ResultCode": 1032, 
+      "ResultDesc": "Request cancelled by user" 
+    } 
+  } 
+} 
+Target user cancelled the 
+pin request prompt 
+	
+HTTP	Response	Codes		
+Response	code				Description		
+200		Request	processed	successfully		
+400		Bad	request		
+401		Unauthorized	request		
+403		Request	is	forbidden		
+404		The	request	resource	is	not	found		
+500		Internal	Host	Error		
+503		Service	unavailable		
+ 
+ 
+Production	Requirements	
+A	duly	signed	request	letter,	template	is	available	on	the	documentation	section	of	the	
+API	on	the	developer	portal.	Send	the	letter	to	buni@kcbgroup.com	
+	
+For	any	additional	support,	please	write	to	buni@kcbgroup.com	

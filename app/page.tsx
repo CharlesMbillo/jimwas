@@ -1,9 +1,22 @@
 export default function Page() {
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-[color:light-dark(#fff,#000)] text-[color:light-dark(#000,#fff)]">
+    <main
+      style={{
+        colorScheme: 'light dark',
+        position: 'relative',
+        display: 'flex',
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'light-dark(#fff, #000)',
+        color: 'light-dark(#000, #fff)',
+      }}
+    >
       <svg
         aria-hidden="true"
-        className="size-20"
+        style={{ width: 80, height: 80 }}
+        width={80}
+        height={80}
         fill="none"
         viewBox="0 0 20 20"
         xmlns="http://www.w3.org/2000/svg"
@@ -15,7 +28,18 @@ export default function Page() {
           strokeLinejoin="round"
         />
       </svg>
-      <p className="absolute left-1/2 top-[calc(50%+56px)] -translate-x-1/2 whitespace-nowrap text-sm font-medium text-muted-foreground">
+      <p
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: 'calc(50% + 56px)',
+          transform: 'translateX(-50%)',
+          whiteSpace: 'nowrap',
+          fontSize: '14px',
+          fontWeight: 500,
+          color: 'light-dark(#71717a, #a1a1aa)',
+        }}
+      >
         Your v0 generation will show here.
       </p>
     </main>
