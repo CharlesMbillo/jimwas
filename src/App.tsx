@@ -7,6 +7,7 @@ import { PosPage } from './routes/pos';
 import { ProductsPage } from './routes/products';
 import { CustomersPage } from './routes/customers';
 import { VoidRequestsPage } from './routes/void-requests';
+import { DevSeedPage } from './routes/dev-seed';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/dev/seed" element={<DevSeedPage />} />
           <Route path="/*" element={<ProtectedRoutes />} />
         </Routes>
       </BrowserRouter>
