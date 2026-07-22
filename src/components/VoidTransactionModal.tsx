@@ -60,11 +60,7 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
             <AlertTriangle className="text-amber-400" size={22} />
             <h2 className="text-lg font-semibold text-white">Request Void</h2>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-slate-400 hover:text-white transition"
-            disabled={submitting}
-          >
+          <button onClick={handleClose} className="text-slate-400 hover:text-white transition" disabled={submitting}>
             <X size={20} />
           </button>
         </div>
@@ -72,15 +68,11 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
         <div className="space-y-4">
           <div className="rounded-lg bg-slate-900/50 p-4 border border-slate-700">
             <p className="text-sm text-slate-400 mb-1">Transaction</p>
-            <p className="text-white font-medium">
-              KES {transaction.total_amount.toLocaleString()}
-            </p>
+            <p className="text-white font-medium">KES {Number(transaction.total_amount).toLocaleString()}</p>
             <p className="text-xs text-slate-500 mt-1">
               {new Date(transaction.created_at).toLocaleString()} · {transaction.payment_method}
             </p>
-            <p className="text-xs text-slate-500">
-              {transaction.transaction_items?.length ?? 0} item(s)
-            </p>
+            <p className="text-xs text-slate-500">{transaction.transaction_items?.length ?? 0} item(s)</p>
           </div>
 
           <div>
@@ -98,14 +90,11 @@ export function VoidTransactionModal({ transaction, isOpen, onClose, onVoidCompl
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-900/30 border border-red-800 p-3 text-sm text-red-300">
-              {error}
-            </div>
+            <div className="rounded-lg bg-red-900/30 border border-red-800 p-3 text-sm text-red-300">{error}</div>
           )}
 
           <div className="rounded-lg bg-amber-900/20 border border-amber-800/50 p-3 text-xs text-amber-300">
-            This will create a void request that must be approved by a manager or admin
-            before the sale is reversed and stock is restored.
+            This will create a void request that must be approved by a manager or admin before the sale is reversed and stock is restored.
           </div>
 
           <div className="flex gap-3 pt-2">

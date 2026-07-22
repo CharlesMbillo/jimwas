@@ -7,8 +7,70 @@ import type {
   VoidRequest,
   ApprovalRequest,
   PosUser,
+  MpesaSettings,
 } from './types';
 import type { PaymentMethod, SaleType } from './types';
+
+const MPESA_SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
+
+// ─── M-Pesa Settings ─────────────────────────────────────────────
+// THE FIX: Settings are persisted in Supabase (not localStorage).
+// On app load, getMpesaSettings() reads from the database. On update,
+// saveMpesaSettings() upserts the singleton row. Settings survive
+// app restarts because they live in the database, not in-memory state.
+
+export async function getMpesaSettings(): Promise<MpesaSettings> {
+  const { data, error } = await supabase
+    .from('mpesa_settings')
+    .select('*')
+    .eq('id', MPESA_SETTINGS_ID)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (data) return data as MpesaSettings;
+
+  // If no row exists yet, create the singleton with defaults
+  const defaults = {
+    id: MPESA_SETTINGS_ID,
+    shortcode: '',
+    passkey: '',
+    consumer_key: '',
+    consumer_secret: '',
+    callback_url: '',
+    environment: 'sandbox' as const,
+    enabled: false,
+    initiator_name: '',
+    security_credential: '',
+  };
+  const { data: created, error: createError } = await supabase
+    .from('mpesa_settings')
+    .insert(defaults)
+    .select()
+    .single();
+
+  if (createError) throw createError;
+  return created as MpesaSettings;
+}
+
+export async function saveMpesaSettings(
+  settings: Omit<MpesaSettings, 'id' | 'updated_at'>
+): Promise<MpesaSettings> {
+  const { data, error } = await supabase
+    .from('mpesa_settings')
+    .upsert({
+      id: MPESA_SETTINGS_ID,
+      ...settings,
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as MpesaSettings;
+}
+
+// ─── Products ────────────────────────────────────────────────────
 
 export async function getAllProducts(): Promise<Product[]> {
   const { data, error } = await supabase
@@ -34,6 +96,8 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
   if (error) throw error;
 }
 
+// ─── Customers ───────────────────────────────────────────────────
+
 export async function getAllCustomers(): Promise<Customer[]> {
   const { data, error } = await supabase.from('customers').select('*').order('name');
   if (error) throw error;
@@ -46,14 +110,12 @@ export async function createCustomer(c: Omit<Customer, 'id' | 'created_at'>): Pr
   return data as Customer;
 }
 
+// ─── Transactions ────────────────────────────────────────────────
+
 export async function getAllTransactions(): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from('transactions')
-    .select(`
-      *,
-      transaction_items (*),
-      customer:customers (*)
-    `)
+    .select(`*, transaction_items (*), customer:customers (*)`)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data as unknown as Transaction[];
@@ -62,11 +124,7 @@ export async function getAllTransactions(): Promise<Transaction[]> {
 export async function getTransactionById(id: string): Promise<Transaction | null> {
   const { data, error } = await supabase
     .from('transactions')
-    .select(`
-      *,
-      transaction_items (*),
-      customer:customers (*)
-    `)
+    .select(`*, transaction_items (*), customer:customers (*)`)
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
@@ -118,9 +176,7 @@ export async function createTransaction(
   return created;
 }
 
-export async function voidTransaction(
-  transactionId: string
-): Promise<void> {
+export async function voidTransactionRecord(transactionId: string): Promise<void> {
   const { error } = await supabase
     .from('transactions')
     .update({ status: 'voided', updated_at: new Date().toISOString() })
@@ -152,16 +208,12 @@ export async function restoreStockForTransaction(transactionId: string): Promise
   }
 }
 
+// ─── Void Requests & Approvals ───────────────────────────────────
+
 export async function getAllVoidRequests(): Promise<VoidRequest[]> {
   const { data, error } = await supabase
     .from('void_requests')
-    .select(`
-      *,
-      transaction:transactions (
-        *,
-        transaction_items (*)
-      )
-    `)
+    .select(`*, transaction:transactions (*, transaction_items (*))`)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data as unknown as VoidRequest[];
@@ -218,11 +270,7 @@ export async function updateApprovalRequest(id: string, updates: Partial<Approva
   if (error) throw error;
 }
 
-export async function getAllPosUsers(): Promise<PosUser[]> {
-  const { data, error } = await supabase.from('pos_users').select('*').order('name');
-  if (error) throw error;
-  return data as PosUser[];
-}
+// ─── Audit Log ───────────────────────────────────────────────────
 
 export async function insertAuditLog(entry: {
   action: string;
@@ -241,4 +289,12 @@ export async function insertAuditLog(entry: {
     details: entry.details ?? null,
   });
   if (error) throw error;
+}
+
+// ─── Users ───────────────────────────────────────────────────────
+
+export async function getAllPosUsers(): Promise<PosUser[]> {
+  const { data, error } = await supabase.from('pos_users').select('*').order('name');
+  if (error) throw error;
+  return data as PosUser[];
 }

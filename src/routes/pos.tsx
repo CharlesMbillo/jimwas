@@ -25,9 +25,7 @@ export function PosPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     try {
@@ -42,8 +40,7 @@ export function PosPage() {
   }
 
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.sku ?? '').toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const cartTotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -51,28 +48,16 @@ export function PosPage() {
   const changeDue = Math.max(0, paid - cartTotal);
 
   function addToCart(product: Product) {
-    const price = saleType === 'wholesale' && product.wholesale_price
-      ? Number(product.wholesale_price)
-      : Number(product.price);
+    const price = saleType === 'wholesale' && product.wholesale_price ? Number(product.wholesale_price) : Number(product.price);
     setCart((prev) => {
       const existing = prev.find((c) => c.product.id === product.id);
-      if (existing) {
-        return prev.map((c) =>
-          c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c
-        );
-      }
+      if (existing) return prev.map((c) => (c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c));
       return [...prev, { product, quantity: 1, unitPrice: price }];
     });
   }
 
   function updateQty(productId: string, delta: number) {
-    setCart((prev) =>
-      prev
-        .map((c) =>
-          c.product.id === productId ? { ...c, quantity: c.quantity + delta } : c
-        )
-        .filter((c) => c.quantity > 0)
-    );
+    setCart((prev) => prev.map((c) => (c.product.id === productId ? { ...c, quantity: c.quantity + delta } : c)).filter((c) => c.quantity > 0));
   }
 
   function removeFromCart(productId: string) {
@@ -81,25 +66,15 @@ export function PosPage() {
 
   function handleSaleTypeChange(newType: SaleType) {
     setSaleType(newType);
-    setCart((prev) =>
-      prev.map((item) => {
-        const price = newType === 'wholesale' && item.product.wholesale_price
-          ? Number(item.product.wholesale_price)
-          : Number(item.product.price);
-        return { ...item, unitPrice: price };
-      })
-    );
+    setCart((prev) => prev.map((item) => {
+      const price = newType === 'wholesale' && item.product.wholesale_price ? Number(item.product.wholesale_price) : Number(item.product.price);
+      return { ...item, unitPrice: price };
+    }));
   }
 
   async function handleCheckout() {
-    if (cart.length === 0) {
-      setError('Cart is empty.');
-      return;
-    }
-    if (paymentMethod === 'cash' && paid < cartTotal) {
-      setError('Amount paid is less than total.');
-      return;
-    }
+    if (cart.length === 0) { setError('Cart is empty.'); return; }
+    if (paymentMethod === 'cash' && paid < cartTotal) { setError('Amount paid is less than total.'); return; }
 
     setSubmitting(true);
     setError(null);
@@ -140,11 +115,7 @@ export function PosPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-slate-400" size={24} />
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-slate-400" size={24} /></div>;
   }
 
   return (
@@ -153,15 +124,10 @@ export function PosPage() {
 
       {success && (
         <div className="rounded-lg bg-emerald-900/30 border border-emerald-800 p-4 text-emerald-300 flex items-center gap-2">
-          <CheckCircle size={18} />
-          {success}
+          <CheckCircle size={18} /> {success}
         </div>
       )}
-      {error && (
-        <div className="rounded-lg bg-red-900/30 border border-red-800 p-4 text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <div className="rounded-lg bg-red-900/30 border border-red-800 p-4 text-red-300">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
@@ -189,9 +155,7 @@ export function PosPage() {
                 <p className="text-xs text-slate-500 mt-1">Stock: {product.stock_quantity}</p>
               </button>
             ))}
-            {filteredProducts.length === 0 && (
-              <p className="col-span-full text-center text-slate-500 py-8 text-sm">No products found.</p>
-            )}
+            {filteredProducts.length === 0 && <p className="col-span-full text-center text-slate-500 py-8 text-sm">No products found.</p>}
           </div>
         </div>
 
@@ -199,20 +163,12 @@ export function PosPage() {
           <div className="flex items-center gap-2">
             <ShoppingCart className="text-emerald-400" size={20} />
             <h2 className="text-lg font-semibold text-white">Cart</h2>
-            {cart.length > 0 && (
-              <span className="ml-auto text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">
-                {cart.length}
-              </span>
-            )}
+            {cart.length > 0 && <span className="ml-auto text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full">{cart.length}</span>}
           </div>
 
           <div>
             <label className="block text-xs text-slate-400 mb-1">Sale Type</label>
-            <select
-              value={saleType}
-              onChange={(e) => handleSaleTypeChange(e.target.value as SaleType)}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-            >
+            <select value={saleType} onChange={(e) => handleSaleTypeChange(e.target.value as SaleType)} className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
               <option value="standard">Standard</option>
               <option value="wholesale">Wholesale</option>
             </select>
@@ -220,11 +176,7 @@ export function PosPage() {
 
           <div>
             <label className="block text-xs text-slate-400 mb-1">Customer</label>
-            <select
-              value={customerId ?? ''}
-              onChange={(e) => setCustomerId(e.target.value || null)}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-            >
+            <select value={customerId ?? ''} onChange={(e) => setCustomerId(e.target.value || null)} className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
               <option value="">Walk-in Customer</option>
               {customers.filter((c) => c.name !== 'Walk-in Customer').map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -240,22 +192,14 @@ export function PosPage() {
                   <p className="text-slate-500 text-xs">KES {item.unitPrice.toLocaleString()} × {item.quantity}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => updateQty(item.product.id, -1)} className="p-1 rounded hover:bg-slate-700 text-slate-400">
-                    <Minus size={14} />
-                  </button>
+                  <button onClick={() => updateQty(item.product.id, -1)} className="p-1 rounded hover:bg-slate-700 text-slate-400"><Minus size={14} /></button>
                   <span className="text-white text-xs w-5 text-center">{item.quantity}</span>
-                  <button onClick={() => updateQty(item.product.id, 1)} className="p-1 rounded hover:bg-slate-700 text-slate-400">
-                    <Plus size={14} />
-                  </button>
-                  <button onClick={() => removeFromCart(item.product.id)} className="p-1 rounded hover:bg-red-900/30 text-slate-400 hover:text-red-400 ml-1">
-                    <Trash2 size={14} />
-                  </button>
+                  <button onClick={() => updateQty(item.product.id, 1)} className="p-1 rounded hover:bg-slate-700 text-slate-400"><Plus size={14} /></button>
+                  <button onClick={() => removeFromCart(item.product.id)} className="p-1 rounded hover:bg-red-900/30 text-slate-400 hover:text-red-400 ml-1"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
-            {cart.length === 0 && (
-              <p className="text-slate-500 text-xs text-center py-4">Cart is empty. Click a product to add.</p>
-            )}
+            {cart.length === 0 && <p className="text-slate-500 text-xs text-center py-4">Cart is empty. Click a product to add.</p>}
           </div>
 
           <div className="border-t border-slate-700 pt-3 space-y-3">
@@ -266,11 +210,7 @@ export function PosPage() {
 
             <div>
               <label className="block text-xs text-slate-400 mb-1">Payment Method</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-              >
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
                 <option value="cash">Cash</option>
                 <option value="mpesa">M-Pesa</option>
                 <option value="card">Card</option>
@@ -280,24 +220,12 @@ export function PosPage() {
             {paymentMethod === 'cash' && (
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Amount Paid</label>
-                <input
-                  type="number"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-                  placeholder="0"
-                />
-                {paid >= cartTotal && cartTotal > 0 && (
-                  <p className="text-xs text-emerald-400 mt-1">Change: KES {changeDue.toLocaleString()}</p>
-                )}
+                <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" placeholder="0" />
+                {paid >= cartTotal && cartTotal > 0 && <p className="text-xs text-emerald-400 mt-1">Change: KES {changeDue.toLocaleString()}</p>}
               </div>
             )}
 
-            <button
-              onClick={handleCheckout}
-              disabled={submitting || cart.length === 0}
-              className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
+            <button onClick={handleCheckout} disabled={submitting || cart.length === 0} className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Complete Sale'}
             </button>
           </div>

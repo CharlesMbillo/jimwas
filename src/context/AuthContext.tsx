@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import type { PosUser, UserRole } from '../lib/types';
+import type { PosUser } from '../lib/types';
 
 interface AuthContextValue {
   user: PosUser | null;
@@ -59,15 +59,4 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
-}
-
-export function getCurrentUserRole(): UserRole | null {
-  const stored = localStorage.getItem('jimwas_pos_user');
-  if (!stored) return null;
-  try {
-    const parsed = JSON.parse(stored) as PosUser;
-    return parsed.role;
-  } catch {
-    return null;
-  }
 }
