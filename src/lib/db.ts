@@ -9,6 +9,7 @@ import type {
   PosUser,
 } from './types';
 import type { PaymentMethod, SaleType } from './types';
+import type { Role } from './security-types';
 
 // Utility function to generate unique IDs
 export function generateId(): string {
@@ -261,4 +262,44 @@ export async function insertAuditLog(entry: {
     details: entry.details ?? null,
   });
   if (error) throw error;
+}
+
+// Role management functions
+export async function getRoleByCode(code: string): Promise<Role | null> {
+  try {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('code', code)
+      .maybeSingle();
+    if (error) throw error;
+    return data as Role | null;
+  } catch (err) {
+    console.warn('[db] Failed to get role by code:', err);
+    return null;
+  }
+}
+
+export async function getAllRoles(): Promise<Role[]> {
+  try {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('*')
+      .order('name');
+    if (error) throw error;
+    return data as Role[];
+  } catch (err) {
+    console.warn('[db] Failed to get roles:', err);
+    return [];
+  }
+}
+
+export async function saveRole(role: Omit<Role, 'id' | 'created_at' | 'updated_at'>): Promise<Role> {
+  const { data, error } = await supabase
+    .from('roles')
+    .insert(role)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Role;
 }
