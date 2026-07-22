@@ -10,6 +10,11 @@ import type {
 } from './types';
 import type { PaymentMethod, SaleType } from './types';
 
+// Utility function to generate unique IDs
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
 export async function getAllProducts(): Promise<Product[]> {
   try {
     const { data, error } = await supabase
