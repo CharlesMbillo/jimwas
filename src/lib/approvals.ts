@@ -6,7 +6,7 @@ import {
   getVoidRequestByTransaction,
   getAllVoidRequests,
   getAllApprovalRequests,
-  voidTransaction,
+  voidTransactionRecord,
   restoreStockForTransaction,
   insertAuditLog,
 } from './db';
@@ -134,7 +134,7 @@ async function executeVoid(approvalRequestId: string, approver: PosUser): Promis
   const vr = voidRequests.find((v) => v.approval_request_id === approvalRequestId);
   if (!vr) throw new Error('Void request not found for this approval');
 
-  await voidTransaction(vr.transaction_id);
+  await voidTransactionRecord(vr.transaction_id);
   await restoreStockForTransaction(vr.transaction_id);
   await updateVoidRequest(vr.id, {
     status: 'completed',

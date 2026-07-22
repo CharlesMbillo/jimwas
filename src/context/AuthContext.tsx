@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { PosUser, UserRole } from '../lib/types';
+import type { PosUser } from '../lib/types';
 
 interface AuthContextValue {
   user: PosUser | null;
   loading: boolean;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -16,72 +17,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('jimwas_pos_user');
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem('jimwas_pos_user');
+    // Check for existing session on mount
+    let mounted = true;
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (session) {
+        await loadPosUser(session);
+      } else {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    })();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      (async () => {
+        if (session) {
+          await loadPosUser(session);
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
+      })();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  async function login(email: string) {
-    // Demo mode - accept demo emails without database
-    const demoUsers: Record<string, PosUser> = {
-      'admin@jimwas.co.ke': {
-        id: 'user-admin',
-        email: 'admin@jimwas.co.ke',
-        full_name: 'Admin User',
-        role: 'admin',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      'manager@jimwas.co.ke': {
-        id: 'user-manager',
-        email: 'manager@jimwas.co.ke',
-        full_name: 'Manager User',
-        role: 'manager',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      'cashier@jimwas.co.ke': {
-        id: 'user-cashier',
-        email: 'cashier@jimwas.co.ke',
-        full_name: 'Cashier User',
-        role: 'cashier',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-    };
+  async function loadPosUser(session: Session) {
+    try {
+      const { data, error } = await supabase
+        .from('pos_users')
+        .select('*')
+        .eq('auth_user_id', session.user.id)
+        .eq('active', true)
+        .maybeSingle();
 
-    if (demoUsers[email]) {
-      const posUser = demoUsers[email];
-      setUser(posUser);
-      localStorage.setItem('jimwas_pos_user', JSON.stringify(posUser));
-      return;
+      if (error) {
+        console.error('Failed to load pos_user:', error);
+        setUser(null);
+        return;
+      }
+
+      if (data) {
+        setUser(data as PosUser);
+      } else {
+        // pos_users row not linked — sign out
+        await supabase.auth.signOut();
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('Error loading pos_user:', err);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
-
-    // Try database lookup for non-demo users
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (error) throw new Error('Login failed');
-    if (!data) throw new Error('User not found or inactive');
-
-    const posUser = data as PosUser;
-    setUser(posUser);
-    localStorage.setItem('jimwas_pos_user', JSON.stringify(posUser));
   }
 
-  function logout() {
+  async function login(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.session) throw new Error('No session returned');
+    // loadPosUser will be called by onAuthStateChange
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('jimwas_pos_user');
   }
 
   return (

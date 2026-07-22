@@ -7,6 +7,7 @@ import { PosPage } from './routes/pos';
 import { ProductsPage } from './routes/products';
 import { CustomersPage } from './routes/customers';
 import { VoidRequestsPage } from './routes/void-requests';
+import { SettingsPage } from './routes/settings';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ function ProtectedRoutes() {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/void-requests" element={<VoidRequestsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

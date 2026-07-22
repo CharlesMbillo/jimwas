@@ -6,6 +6,7 @@ export interface PosUser {
   email: string;
   role: UserRole;
   active: boolean;
+  auth_user_id: string | null;
   created_at: string;
 }
 
@@ -33,7 +34,7 @@ export interface Customer {
 
 export type TransactionStatus = 'completed' | 'voided';
 export type PaymentMethod = 'cash' | 'mpesa' | 'card';
-export type SaleType = 'standard' | 'wholesale' | 'lipa_mdogo' | 'kyama';
+export type SaleType = 'standard' | 'wholesale';
 
 export interface TransactionItem {
   id: string;
@@ -58,6 +59,7 @@ export interface Transaction {
   status: TransactionStatus;
   notes: string | null;
   created_at: string;
+  updated_at: string;
   transaction_items?: TransactionItem[];
   customer?: Customer | null;
 }
@@ -99,5 +101,19 @@ export interface ApprovalRequest {
   rejection_reason: string | null;
   approved_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface MpesaSettings {
+  id: string;
+  shortcode: string;
+  passkey: string;
+  consumer_key: string;
+  consumer_secret: string;
+  callback_url: string;
+  environment: 'sandbox' | 'production';
+  enabled: boolean;
+  initiator_name: string;
+  security_credential: string;
   updated_at: string;
 }

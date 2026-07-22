@@ -12,6 +12,6 @@ export function canManageProducts(role: UserRole): boolean {
   return role === 'admin' || role === 'manager';
 }
 
-export function canViewReports(role: UserRole): boolean {
-  return role === 'admin' || role === 'manager' || role === 'cashier';
+export function canManageSettings(role: UserRole): boolean {
+  return role === 'admin' || role === 'manager';
 }

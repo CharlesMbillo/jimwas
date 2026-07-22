@@ -1,26 +1,20 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Users, FileX, LogOut, Leaf } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, FileX, Settings, LogOut, Leaf } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { canApproveVoid } from '../lib/permissions';
+import { canApproveVoid, canManageSettings } from '../lib/permissions';
 import type { ReactNode } from 'react';
-
-interface NavItem {
-  to: string;
-  label: string;
-  icon: ReactNode;
-  show: boolean;
-}
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems: NavItem[] = [
+  const navItems = [
     { to: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} />, show: true },
     { to: '/pos', label: 'New Sale', icon: <ShoppingCart size={18} />, show: true },
     { to: '/products', label: 'Products', icon: <Package size={18} />, show: true },
     { to: '/customers', label: 'Customers', icon: <Users size={18} />, show: true },
     { to: '/void-requests', label: 'Void Requests', icon: <FileX size={18} />, show: canApproveVoid(user?.role ?? 'cashier') },
+    { to: '/settings', label: 'Settings', icon: <Settings size={18} />, show: canManageSettings(user?.role ?? 'cashier') },
   ];
 
   const handleLogout = () => {
@@ -51,9 +45,7 @@ export function Layout({ children }: { children: ReactNode }) {
               end={item.to === '/'}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
-                  isActive
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`
               }
             >

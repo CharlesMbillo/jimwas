@@ -16,10 +16,10 @@ export function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await login(email);
+      await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -27,7 +27,7 @@ export function LoginPage() {
 
   const quickLogin = (em: string) => {
     setEmail(em);
-    setPassword('demo');
+    setPassword('jimwas123');
   };
 
   return (
@@ -60,15 +60,14 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
               className="w-full rounded-lg bg-slate-900 border border-slate-700 text-white px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition"
-              placeholder="Any value works (demo)"
+              placeholder="Enter your password"
             />
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-900/30 border border-red-800 p-3 text-sm text-red-300">
-              {error}
-            </div>
+            <div className="rounded-lg bg-red-900/30 border border-red-800 p-3 text-sm text-red-300">{error}</div>
           )}
 
           <button
@@ -87,7 +86,7 @@ export function LoginPage() {
           </button>
 
           <div className="pt-2 border-t border-slate-700">
-            <p className="text-xs text-slate-500 mb-2 text-center">Quick login (demo):</p>
+            <p className="text-xs text-slate-500 mb-2 text-center">Quick login (password: jimwas123):</p>
             <div className="flex gap-2 justify-center">
               <button type="button" onClick={() => quickLogin('admin@jimwas.co.ke')} className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition">Admin</button>
               <button type="button" onClick={() => quickLogin('manager@jimwas.co.ke')} className="text-xs px-3 py-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition">Manager</button>
