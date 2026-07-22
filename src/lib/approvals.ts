@@ -12,6 +12,11 @@ import {
 } from './db';
 import type { Transaction, VoidRequest, ApprovalRequest, PosUser } from './types';
 
+export async function getPendingApprovalsForUser(approverId: string): Promise<ApprovalRequest[]> {
+  const approvals = await getAllApprovalRequests();
+  return approvals.filter((a) => a.approver_id === approverId && a.status === 'pending');
+}
+
 export async function requestVoidSale(
   transaction: Transaction,
   reason: string,

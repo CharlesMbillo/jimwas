@@ -21,6 +21,8 @@ export interface Product {
   active: boolean;
   created_at: string;
   updated_at: string;
+  stock?: number;
+  cost?: number;
 }
 
 export interface Customer {

@@ -103,3 +103,23 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
+
+export function RoleGuard({
+  children,
+  requiredRoles,
+}: {
+  children: ReactNode;
+  requiredRoles: string[];
+}) {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return null;
+  }
+
+  if (!requiredRoles.includes(user.role)) {
+    return null;
+  }
+
+  return <>{children}</>;
+}

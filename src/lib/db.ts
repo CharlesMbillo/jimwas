@@ -279,3 +279,398 @@ export async function getAllPosUsers(): Promise<PosUser[]> {
   if (error) throw error;
   return data as PosUser[];
 }
+
+// KCB Payment Functions
+export interface KCBPaymentTransaction {
+  id?: string;
+  checkout_request_id?: string;
+  merchant_request_id?: string;
+  phone_number: string;
+  amount: number;
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled' | 'timeout';
+  customer_id?: string | null;
+  cashier_id?: string | null;
+  cashier_name?: string | null;
+  receipt_number?: string | null;
+  mpesa_receipt_number?: string | null;
+  invoice_number?: string | null;
+  message_id?: string | null;
+  correlation_id?: string | null;
+  kcb_error_code?: string | null;
+  kcb_error_message?: string | null;
+  kcb_status_code?: string | null;
+  mpesa_response_description?: string | null;
+  mpesa_request_id?: string | null;
+  ipn_received?: boolean | null;
+  description?: string | null;
+  merchant_name?: string | null;
+  retry_count?: number;
+  should_poll?: boolean;
+  request_payload?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface KCBPaymentRecord {
+  id: string;
+  checkout_request_id: string;
+  merchant_request_id: string;
+  phone_number: string;
+  amount: number;
+  status: string;
+  customer_id?: string | null;
+  cashier_id?: string | null;
+  cashier_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KCBStatistics {
+  total_transactions: number;
+  total_amount: number;
+  successful_transactions: number;
+  failed_transactions: number;
+  pending_transactions: number;
+  average_transaction_amount: number;
+  total_success?: number;
+  total_amount_success?: number;
+  total_failed?: number;
+  totalTransactions?: number;
+  totalRevenue?: number;
+  successRate?: number;
+}
+
+export interface ExpenseCategoryRecord {
+  id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackupData {
+  products: Product[];
+  customers: Customer[];
+  transactions: Transaction[];
+  users: PosUser[];
+}
+
+export interface LoginHistory {
+  id: string;
+  user_id: string;
+  username: string;
+  login_time: string;
+  logout_time?: string | null;
+  ip_address?: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string | null;
+  actor_id?: string | null;
+  actor_name?: string | null;
+  details?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface PriceChangeHistory {
+  id: string;
+  product_id: string;
+  old_price: number;
+  new_price: number;
+  changed_by: string;
+  created_at: string;
+}
+
+// Utility Functions
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// KCB Payment Management
+export async function saveKCBPaymentTransaction(
+  tx: Omit<KCBPaymentTransaction, 'id' | 'created_at' | 'updated_at'>
+): Promise<KCBPaymentTransaction> {
+  const { data, error } = await supabase
+    .from('kcb_transactions')
+    .insert(tx)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as KCBPaymentTransaction;
+}
+
+export async function updateKCBTransactionStatus(
+  id: string,
+  status: KCBPaymentTransaction['status'],
+  updates?: Partial<KCBPaymentTransaction>
+): Promise<void> {
+  const { error } = await supabase
+    .from('kcb_transactions')
+    .update({ 
+      status, 
+      ...updates,
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function getKCBPaymentTransaction(id: string): Promise<KCBPaymentTransaction | null> {
+  const { data, error } = await supabase
+    .from('kcb_transactions')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as KCBPaymentTransaction | null;
+}
+
+export async function markKCBTransactionComplete(id: string, receiptNumber: string): Promise<void> {
+  const { error } = await supabase
+    .from('kcb_transactions')
+    .update({
+      status: 'success',
+      receipt_number: receiptNumber,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function getAllKCBTransactions(limit?: number): Promise<KCBPaymentTransaction[]> {
+  let query = supabase
+    .from('kcb_transactions')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (limit) {
+    query = query.limit(limit);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+  return data as KCBPaymentTransaction[];
+}
+
+export async function getAllKCBPayments(): Promise<KCBPaymentRecord[]> {
+  const { data, error } = await supabase
+    .from('kcb_transactions')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as KCBPaymentRecord[];
+}
+
+export async function getKCBPaymentsByStatus(status: string): Promise<KCBPaymentRecord[]> {
+  const { data, error } = await supabase
+    .from('kcb_transactions')
+    .select('*')
+    .eq('status', status)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as KCBPaymentRecord[];
+}
+
+export async function getKCBPaymentStats(): Promise<KCBStatistics> {
+  const { data, error } = await supabase.from('kcb_transactions').select('*');
+  if (error) throw error;
+
+  const transactions = data as KCBPaymentTransaction[];
+  const successful = transactions.filter((t) => t.status === 'success').length;
+  const failed = transactions.filter((t) => t.status === 'failed').length;
+  const pending = transactions.filter((t) => t.status === 'pending').length;
+  const total = transactions.length;
+  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+
+  return {
+    total_transactions: total,
+    total_amount: totalAmount,
+    successful_transactions: successful,
+    failed_transactions: failed,
+    pending_transactions: pending,
+    average_transaction_amount: total > 0 ? totalAmount / total : 0,
+  };
+}
+
+export async function getKCBStatistics(sinceDate?: Date): Promise<KCBStatistics> {
+  let query = supabase.from('kcb_transactions').select('*');
+  
+  if (sinceDate) {
+    query = query.gte('created_at', sinceDate.toISOString());
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const transactions = data as KCBPaymentTransaction[];
+  const successful = transactions.filter((t) => t.status === 'success').length;
+  const failed = transactions.filter((t) => t.status === 'failed').length;
+  const pending = transactions.filter((t) => t.status === 'pending').length;
+  const total = transactions.length;
+  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+
+  return {
+    total_transactions: total,
+    total_amount: totalAmount,
+    successful_transactions: successful,
+    failed_transactions: failed,
+    pending_transactions: pending,
+    average_transaction_amount: total > 0 ? totalAmount / total : 0,
+  };
+}
+
+// Audit Log Functions
+export async function saveAuditLog(entry: Omit<AuditLogEntry, 'id' | 'created_at'>): Promise<AuditLogEntry> {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .insert(entry)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as AuditLogEntry;
+}
+
+export async function getAllAuditLogs(): Promise<AuditLogEntry[]> {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as AuditLogEntry[];
+}
+
+export async function getAuditLogsByActor(actorId: string): Promise<AuditLogEntry[]> {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .eq('actor_id', actorId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as AuditLogEntry[];
+}
+
+// User Management
+export async function saveUser(user: Omit<PosUser, 'id' | 'created_at'>): Promise<PosUser> {
+  const { data, error } = await supabase
+    .from('pos_users')
+    .insert(user)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as PosUser;
+}
+
+export async function getUserByUsername(name: string): Promise<PosUser | null> {
+  const { data, error } = await supabase
+    .from('pos_users')
+    .select('*')
+    .eq('name', name)
+    .maybeSingle();
+  if (error) throw error;
+  return data as PosUser | null;
+}
+
+export async function getUser(id: string): Promise<PosUser | null> {
+  const { data, error } = await supabase
+    .from('pos_users')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data as PosUser | null;
+}
+
+// Price History
+export async function savePriceChangeHistory(
+  change: Omit<PriceChangeHistory, 'id' | 'created_at'>
+): Promise<PriceChangeHistory> {
+  const { data, error } = await supabase
+    .from('price_change_history')
+    .insert(change)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as PriceChangeHistory;
+}
+
+export async function getPriceChangeHistory(productId: string): Promise<PriceChangeHistory[]> {
+  const { data, error } = await supabase
+    .from('price_change_history')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as PriceChangeHistory[];
+}
+
+// Login History
+export async function saveLoginHistory(entry: Omit<LoginHistory, 'id'>): Promise<LoginHistory> {
+  const { data, error } = await supabase
+    .from('login_history')
+    .insert(entry)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as LoginHistory;
+}
+
+export async function getLoginHistoryByUser(userId: string): Promise<LoginHistory[]> {
+  const { data, error } = await supabase
+    .from('login_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('login_time', { ascending: false });
+  if (error) throw error;
+  return data as LoginHistory[];
+}
+
+export async function getAllLoginHistory(): Promise<LoginHistory[]> {
+  const { data, error } = await supabase
+    .from('login_history')
+    .select('*')
+    .order('login_time', { ascending: false });
+  if (error) throw error;
+  return data as LoginHistory[];
+}
+
+// Backup/Restore Functions
+export async function backupDatabase(): Promise<BackupData> {
+  const [products, customers, transactions, users] = await Promise.all([
+    getAllProducts(),
+    getAllCustomers(),
+    getAllTransactions(),
+    getAllPosUsers(),
+  ]);
+
+  return { products, customers, transactions, users };
+}
+
+export async function restoreFromBackup(backup: BackupData): Promise<void> {
+  // Implementation would restore from backup data
+  console.log('Restore from backup:', backup);
+}
+
+// Expense Category Functions
+export async function getAllExpenseCategories(): Promise<ExpenseCategoryRecord[]> {
+  const { data, error } = await supabase
+    .from('expense_categories')
+    .select('*')
+    .order('name');
+  if (error) throw error;
+  return data as ExpenseCategoryRecord[];
+}
+
+export async function createExpenseCategory(
+  category: Omit<ExpenseCategoryRecord, 'id' | 'created_at' | 'updated_at'>
+): Promise<ExpenseCategoryRecord> {
+  const { data, error } = await supabase
+    .from('expense_categories')
+    .insert(category)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ExpenseCategoryRecord;
+}

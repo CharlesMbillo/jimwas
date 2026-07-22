@@ -53,7 +53,7 @@ export function MpesaPaymentsPage() {
     setIsLoading(true);
     try {
       const data = await getAllKCBPayments();
-      const sorted = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const sorted = data.sort((a: KCBPaymentRecord, b: KCBPaymentRecord) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setPayments(sorted);
     } catch (error) {
       console.error('[v0] Failed to load M-Pesa payments:', error);
